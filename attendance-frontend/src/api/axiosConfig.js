@@ -1,10 +1,9 @@
 import axios from 'axios';
 
 const instance = axios.create({
-  baseURL: 'http://localhost:3001/api'
+  baseURL: 'https://uprak-it-production.up.railway.app/api'
 });
 
-// Kirim token di setiap request otomatis
 instance.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -13,7 +12,6 @@ instance.interceptors.request.use((config) => {
   return config;
 });
 
-// Kalau token expired, redirect ke login
 instance.interceptors.response.use(
   response => response,
   error => {

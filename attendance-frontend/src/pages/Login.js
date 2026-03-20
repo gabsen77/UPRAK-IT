@@ -16,7 +16,7 @@ const Login = ({ onLogin }) => {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.post('http://localhost:3001/api/auth/login', {
+        const res = await axios.post('https://uprak-it-production.up.railway.app/api/auth/login', {
         username, password
       });
       localStorage.setItem('token', res.data.token);
