@@ -52,7 +52,6 @@ const Settings = () => {
   };
 
   const handleExport = () => {
-    const token = localStorage.getItem('token');
     let url = 'https://uprak-it-production.up.railway.app/api/export/excel';
     if (startDate && endDate) url += `?startDate=${startDate}&endDate=${endDate}`;
     const a = document.createElement('a');
