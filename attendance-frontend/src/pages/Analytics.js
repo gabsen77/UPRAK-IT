@@ -7,7 +7,7 @@ import {
   Title, Tooltip, Legend,
 } from 'chart.js';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 const Analytics = () => {
   const [weatherData, setWeatherData] = useState(null);
