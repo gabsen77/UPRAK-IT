@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axiosConfig';
-import { Bar, Doughnut } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement,
-  ArcElement, Title, Tooltip, Legend,
+  Title, Tooltip, Legend,
 } from 'chart.js';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
