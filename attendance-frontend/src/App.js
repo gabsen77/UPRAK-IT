@@ -5,6 +5,7 @@ import Students       from './pages/Students';
 import Analytics      from './pages/Analytics';
 import Login          from './pages/Login';
 import UserManagement from './pages/UserManagement';
+import Settings from './pages/Settings';
 import './App.css';
 
 function App() {
@@ -41,6 +42,8 @@ function App() {
             {/* Hanya admin yang bisa lihat menu ini */}
             {isAdmin && <NavLink to="/students">Students</NavLink>}
             {isAdmin && <NavLink to="/users">Users</NavLink>}
+            {isAdmin && <NavLink to="/settings">Settings</NavLink>}
+
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '0.85em', opacity: 0.8 }}>
@@ -77,6 +80,8 @@ function App() {
             />
             <Route path="/users"
               element={isAdmin ? <UserManagement /> : <Navigate to="/" />}
+            />
+            <Route path="/settings" element={isAdmin ? <Settings /> : <Navigate to="/" />} 
             />
 
             <Route path="*" element={<Navigate to="/" />} />

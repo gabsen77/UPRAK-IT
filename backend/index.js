@@ -5,6 +5,8 @@ const bcrypt = require('bcryptjs');
 const jwt    = require('jsonwebtoken');
 const app     = express();
 const cron = require('node-cron');
+const xlsx = require('xlsx');
+const axiosLib = require('axios');
 
 app.use(express.json());
 app.use(cors({
@@ -308,6 +310,185 @@ app.delete('/api/students/:id', authenticateToken, adminOnly, async (req, res) =
     res.json({ success: true, message: 'Siswa berhasil dihapus' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// -------- GANTI PASSWORD --------
+app.put('/api/auth/password', authenticateToken, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  try {
+    const result = await pool.query(
+      'SELECT * FROM users WHERE id = $1', [req.user.id]
+    );
+    const user  = result.rows[0];
+    const valid = await bcrypt.compare(currentPassword, user.password);
+    if (!valid) return res.status(401).json({ error: 'Password lama salah' });
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await pool.query(
+      'UPDATE users SET password = $1 WHERE id = $2',
+      [hashed, req.user.id]
+    );
+    res.json({ success: true, message: 'Password berhasil diubah' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------- EDIT STUDENT --------
+app.put('/api/students/:id', authenticateToken, adminOnly, async (req, res) => {
+  const { id } = req.params;
+  const { uid, name, class: kelas, phone } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE students SET uid = $1, name = $2, class = $3, phone = $4
+       WHERE id = $5 RETURNING *`,
+      [uid, name, kelas, phone, id]
+    );
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'UID sudah dipakai siswa lain' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------- GET SEMUA SISWA + STATUS HADIR HARI INI --------
+app.get('/api/students/today', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        s.*,
+        a.attendance_status,
+        a.time as scan_time,
+        a.scanned_at,
+        CASE WHEN a.id IS NOT NULL THEN true ELSE false END as hadir
+      FROM students s
+      LEFT JOIN attendance a 
+        ON s.uid = a.uid 
+        AND DATE(a.scanned_at) = CURRENT_DATE
+        AND a.status = 'present'
+      ORDER BY s.name ASC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------- SCHEDULE OVERRIDE --------
+app.get('/api/schedule/today', authenticateToken, async (req, res) => {
+  try {
+    const today = new Date().toLocaleDateString('id-ID', {
+      day:'2-digit', month:'2-digit', year:'numeric'
+    }).split('/').reverse().join('/');
+
+    const result = await pool.query(
+      'SELECT * FROM schedule_override WHERE date = $1', [today]
+    );
+    if (result.rows.length > 0) {
+      res.json(result.rows[0]);
+    } else {
+      res.json({
+        jam_masuk_h: 6,  jam_masuk_m: 30,
+        jam_telat_h: 6,  jam_telat_m: 30,
+        jam_pulang_h: 15, jam_pulang_m: 20
+      });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/schedule/today', authenticateToken, adminOnly, async (req, res) => {
+  const { jam_masuk_h, jam_masuk_m, jam_telat_h, jam_telat_m, jam_pulang_h, jam_pulang_m } = req.body;
+  try {
+    const today = new Date().toLocaleDateString('id-ID', {
+      day:'2-digit', month:'2-digit', year:'numeric'
+    }).split('/').reverse().join('/');
+
+    await pool.query(`
+      INSERT INTO schedule_override (date, jam_masuk_h, jam_masuk_m, jam_telat_h, jam_telat_m, jam_pulang_h, jam_pulang_m)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      ON CONFLICT (date) DO UPDATE SET
+        jam_masuk_h=$2, jam_masuk_m=$3,
+        jam_telat_h=$4, jam_telat_m=$5,
+        jam_pulang_h=$6, jam_pulang_m=$7
+    `, [today, jam_masuk_h, jam_masuk_m, jam_telat_h, jam_telat_m, jam_pulang_h, jam_pulang_m]);
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------- EXPORT EXCEL --------
+app.get('/api/export/excel', authenticateToken, async (req, res) => {
+  const { startDate, endDate } = req.query;
+  try {
+    let query = `SELECT name, class, uid, attendance_status, weather, temperature, humidity, time, date, scanned_at
+                 FROM attendance WHERE status = 'present'`;
+    const params = [];
+
+    if (startDate && endDate) {
+      query += ` AND date >= $1 AND date <= $2`;
+      params.push(startDate, endDate);
+    }
+    query += ' ORDER BY scanned_at DESC';
+
+    const result = await pool.query(query, params);
+
+    const data = result.rows.map(r => ({
+      'Nama':        r.name,
+      'Kelas':       r.class,
+      'UID Kartu':   r.uid,
+      'Status':      r.attendance_status === 'tepat_waktu' ? 'Tepat Waktu' :
+                     r.attendance_status === 'telat' ? 'Telat' :
+                     r.attendance_status === 'pulang' ? 'Pulang' : r.attendance_status,
+      'Cuaca':       r.weather,
+      'Suhu (°C)':   r.temperature,
+      'Kelembaban %': r.humidity,
+      'Jam':         r.time,
+      'Tanggal':     r.date,
+    }));
+
+    const ws = xlsx.utils.json_to_sheet(data);
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, 'Absensi');
+
+    // Auto column width
+    const colWidths = Object.keys(data[0] || {}).map(key => ({
+      wch: Math.max(key.length, ...data.map(r => String(r[key] || '').length)) + 2
+    }));
+    ws['!cols'] = colWidths;
+
+    const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Disposition', 'attachment; filename=laporan-absensi.xlsx');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buffer);
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------- NOTIFIKASI WHATSAPP (FONNTE) --------
+app.post('/api/notify/whatsapp', authenticateToken, async (req, res) => {
+  const { phone, message } = req.body;
+  try {
+    const response = await axiosLib.post('https://fontteapi.com/send', {
+      target:  phone,
+      message: message,
+    }, {
+      headers: {
+        'Authorization': process.env.FONNTE_TOKEN
+      }
+    });
+    res.json({ success: true, data: response.data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

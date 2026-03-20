@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axiosConfig';
 
+const [filterDate, setFilterDate] = useState('');
+
 const statusBadge = (status) => {
   const map = {
     tepat_waktu: { class: 'badge-green',  label: 'Tepat Waktu' },
@@ -60,11 +62,12 @@ const Dashboard = () => {
 
   // Filter data
   const filtered = attendance.filter(r => {
-    if (!showUnknown && r.status === 'unknown') return false;
-    if (search && !r.name?.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filterClass && r.class !== filterClass) return false;
-    if (filterStatus && r.attendance_status !== filterStatus) return false;
-    return true;
+  if (!showUnknown && r.status === 'unknown') return false;
+  if (search && !r.name?.toLowerCase().includes(search.toLowerCase())) return false;
+  if (filterClass && r.class !== filterClass) return false;
+  if (filterStatus && r.attendance_status !== filterStatus) return false;
+  if (filterDate && r.date !== filterDate) return false;
+  return true;
   });
 
   return (
@@ -123,6 +126,19 @@ const Dashboard = () => {
             onChange={e => setSearch(e.target.value)}
             style={{
               flex: 1, minWidth: '200px',
+              padding: '9px 14px',
+              border: '1px solid #e2e8f0',
+              borderRadius: '8px',
+              fontSize: '0.9em',
+              outline: 'none',
+            }}
+          />
+
+          <input
+            type="date"
+            value={filterDate}
+            onChange={e => setFilterDate(e.target.value)}
+            style={{
               padding: '9px 14px',
               border: '1px solid #e2e8f0',
               borderRadius: '8px',
