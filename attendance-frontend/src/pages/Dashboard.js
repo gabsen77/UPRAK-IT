@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axiosConfig';
 
-const [filterDate, setFilterDate] = useState('');
-
 const statusBadge = (status) => {
   const map = {
     tepat_waktu: { class: 'badge-green',  label: 'Tepat Waktu' },
@@ -27,6 +25,8 @@ const Dashboard = () => {
   const [filterClass,   setFilterClass]   = useState('');
   const [filterStatus,  setFilterStatus]  = useState('');
   const [showUnknown,   setShowUnknown]   = useState(false);
+  const [filterDate, setFilterDate] = useState('');
+
 
   const fetchAttendance = async () => {
     try {
