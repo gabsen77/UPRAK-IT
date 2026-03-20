@@ -1,22 +1,53 @@
-# Dependencies
+# ===========================
+# Node Modules
+# ===========================
 node_modules/
 */node_modules/
+**/node_modules/
 
-# Environment variables (JANGAN sampai ke GitHub!)
+# ===========================
+# Environment Variables
+# JANGAN sampai ke GitHub!
+# ===========================
 .env
+.env.local
+.env.development
+.env.production
 */.env
+**/.env
 backend/.env
 
-# Build folder React
+# ===========================
+# React Build
+# ===========================
 attendance-frontend/build/
+build/
 
+# ===========================
 # Logs
+# ===========================
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# OS files
+# ===========================
+# OS Files
+# ===========================
 .DS_Store
 Thumbs.db
+desktop.ini
 
+# ===========================
 # VS Code
+# ===========================
 .vscode/
+*.code-workspace
+
+# ===========================
+# Misc
+# ===========================
+.cache/
+.parcel-cache/
+dist/
+coverage/

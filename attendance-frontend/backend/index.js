@@ -1,7 +1,7 @@
 const express = require('express');
 const pool    = require('./db');
 const cors    = require('cors');
-const bcrypt = require('bcryptjs');
+const bcrypt = require('./node_modules/bcryptjs/umd');
 const jwt    = require('jsonwebtoken');
 const app     = express();
 
@@ -10,13 +10,6 @@ app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'DELETE', 'PUT'],
 }));
-
-const adminOnly = (req, res, next) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Akses ditolak. Admin only.' });
-  }
-  next();
-};
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -83,7 +76,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // -------- REGISTER --------
-app.post('/api/auth/register', authenticateToken, adminOnly, async (req, res) => {
+app.post('/api/auth/register', authenticateToken, async (req, res) => {
   const { username, password, role } = req.body;
   try {
     const hashed = await bcrypt.hash(password, 10);
@@ -102,7 +95,7 @@ app.post('/api/auth/register', authenticateToken, adminOnly, async (req, res) =>
 });
 
 // -------- GET ALL USERS --------
-app.get('/api/auth/users', authenticateToken, adminOnly, async (req, res) => {
+app.get('/api/auth/users', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
       'SELECT id, username, role, created_at FROM users ORDER BY id ASC'
@@ -114,7 +107,7 @@ app.get('/api/auth/users', authenticateToken, adminOnly, async (req, res) => {
 });
 
 // -------- DELETE USER --------
-app.delete('/api/auth/users/:id', authenticateToken, adminOnly, async (req, res) => {
+app.delete('/api/auth/users/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
     await pool.query('DELETE FROM users WHERE id = $1', [id]);
@@ -248,7 +241,7 @@ app.get('/api/analytics/daily',   authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/students',    authenticateToken, adminOnly, async (req, res) => {
+app.get('/api/students',    authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
       'SELECT * FROM students ORDER BY id ASC'
@@ -259,7 +252,7 @@ app.get('/api/students',    authenticateToken, adminOnly, async (req, res) => {
   }
 });
 
-app.post('/api/students',   authenticateToken, adminOnly, async (req, res) => {
+app.post('/api/students',   authenticateToken, async (req, res) => {
   const { uid, name, class: kelas } = req.body;
   try {
     const result = await pool.query(
@@ -277,7 +270,7 @@ app.post('/api/students',   authenticateToken, adminOnly, async (req, res) => {
   }
 });
 
-app.delete('/api/students/:id', authenticateToken, adminOnly, async (req, res) => {
+app.delete('/api/students/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
     await pool.query('DELETE FROM students WHERE id = $1', [id]);
