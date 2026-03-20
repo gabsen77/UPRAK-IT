@@ -478,14 +478,14 @@ app.get('/api/export/excel', authenticateToken, async (req, res) => {
 app.post('/api/notify/whatsapp', authenticateToken, async (req, res) => {
   const { phone, message } = req.body;
   try {
-    const response = await axiosLib.post('https://fontteapi.com/send', {
-      target:  phone,
-      message: message,
-    }, {
-      headers: {
-        'Authorization': process.env.FONNTE_TOKEN
-      }
-    });
+    const response = await axiosLib.post('https://api.fonnte.com/send', {
+    target:  phone,
+    message: message,
+  }, {
+    headers: {
+      'Authorization': process.env.FONNTE_TOKEN
+    }
+  });
     res.json({ success: true, data: response.data });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -66,7 +66,11 @@ const Dashboard = () => {
   if (search && !r.name?.toLowerCase().includes(search.toLowerCase())) return false;
   if (filterClass && r.class !== filterClass) return false;
   if (filterStatus && r.attendance_status !== filterStatus) return false;
-  if (filterDate && r.date !== filterDate) return false;
+  if (filterDate) {
+  const [y, m, d] = filterDate.split('-');
+  const formatted = `${d}/${m}/${y}`;
+  if (r.date !== formatted) return false;
+  }
   return true;
   });
 
