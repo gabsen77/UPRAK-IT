@@ -19,8 +19,12 @@ const weatherIcon = (w) => {
 };
 
 const Dashboard = () => {
-  const [attendance, setAttendance] = useState([]);
-  const [error, setError]           = useState('');
+  const [attendance,    setAttendance]    = useState([]);
+  const [error,         setError]         = useState('');
+  const [search,        setSearch]        = useState('');
+  const [filterClass,   setFilterClass]   = useState('');
+  const [filterStatus,  setFilterStatus]  = useState('');
+  const [showUnknown,   setShowUnknown]   = useState(false);
 
   const fetchAttendance = async () => {
     try {
@@ -48,6 +52,20 @@ const Dashboard = () => {
     telat:       today.filter(r => r.attendance_status === 'telat').length,
     unknown:     today.filter(r => r.status === 'unknown').length,
   };
+
+  // Ambil list kelas unik untuk filter dropdown
+  const kelasList = [...new Set(
+    attendance.filter(r => r.class && r.class !== 'Unknown').map(r => r.class)
+  )].sort();
+
+  // Filter data
+  const filtered = attendance.filter(r => {
+    if (!showUnknown && r.status === 'unknown') return false;
+    if (search && !r.name?.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filterClass && r.class !== filterClass) return false;
+    if (filterStatus && r.attendance_status !== filterStatus) return false;
+    return true;
+  });
 
   return (
     <div>
@@ -79,12 +97,114 @@ const Dashboard = () => {
             <p>Telat</p>
           </div>
         </div>
-        <div className="stat-card red">
+        <div className="stat-card red"
+          onClick={() => setShowUnknown(!showUnknown)}
+          style={{ cursor: 'pointer' }}
+          title="Klik untuk toggle tampilan unknown"
+        >
           <div className="stat-icon">❓</div>
           <div className="stat-info">
             <h3>{stats.unknown}</h3>
-            <p>Kartu Tidak Dikenal</p>
+            <p>Kartu Tidak Dikenal {showUnknown ? '(ditampilkan)' : '(disembunyikan)'}</p>
           </div>
+        </div>
+      </div>
+
+      {/* Search & Filter Bar */}
+      <div className="card" style={{ marginBottom: '16px' }}>
+        <div className="card-body" style={{
+          display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center'
+        }}>
+          {/* Search nama */}
+          <input
+            type="text"
+            placeholder="🔍 Cari nama siswa..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{
+              flex: 1, minWidth: '200px',
+              padding: '9px 14px',
+              border: '1px solid #e2e8f0',
+              borderRadius: '8px',
+              fontSize: '0.9em',
+              outline: 'none',
+            }}
+          />
+
+          {/* Filter kelas */}
+          <select
+            value={filterClass}
+            onChange={e => setFilterClass(e.target.value)}
+            style={{
+              padding: '9px 14px',
+              border: '1px solid #e2e8f0',
+              borderRadius: '8px',
+              fontSize: '0.9em',
+              outline: 'none',
+              minWidth: '150px',
+            }}
+          >
+            <option value="">Semua Kelas</option>
+            {kelasList.map(k => (
+              <option key={k} value={k}>{k}</option>
+            ))}
+          </select>
+
+          {/* Filter status */}
+          <select
+            value={filterStatus}
+            onChange={e => setFilterStatus(e.target.value)}
+            style={{
+              padding: '9px 14px',
+              border: '1px solid #e2e8f0',
+              borderRadius: '8px',
+              fontSize: '0.9em',
+              outline: 'none',
+              minWidth: '160px',
+            }}
+          >
+            <option value="">Semua Status</option>
+            <option value="tepat_waktu">Tepat Waktu</option>
+            <option value="telat">Telat</option>
+            <option value="pulang">Pulang</option>
+          </select>
+
+          {/* Toggle unknown */}
+          <button
+            onClick={() => setShowUnknown(!showUnknown)}
+            style={{
+              padding: '9px 14px',
+              border: '1px solid #e2e8f0',
+              borderRadius: '8px',
+              fontSize: '0.9em',
+              cursor: 'pointer',
+              background: showUnknown ? '#fef2f2' : '#f8fafc',
+              color: showUnknown ? '#dc2626' : '#718096',
+              fontWeight: 500,
+            }}
+          >
+            {showUnknown ? '🚫 Sembunyikan Unknown' : '👁️ Tampilkan Unknown'}
+          </button>
+
+          {/* Reset filter */}
+          {(search || filterClass || filterStatus) && (
+            <button
+              onClick={() => { setSearch(''); setFilterClass(''); setFilterStatus(''); }}
+              style={{
+                padding: '9px 14px',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                fontSize: '0.9em',
+                cursor: 'pointer',
+                background: '#f8fafc',
+                color: '#718096',
+              }}
+            >✕ Reset Filter</button>
+          )}
+
+          <span style={{ fontSize: '0.85em', color: '#a0aec0', marginLeft: 'auto' }}>
+            {filtered.length} data ditampilkan
+          </span>
         </div>
       </div>
 
@@ -97,22 +217,24 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {error && <div className="alert alert-error" style={{margin:'16px 20px'}}>{error}</div>}
+        {error && (
+          <div className="alert alert-error" style={{ margin: '16px 20px' }}>{error}</div>
+        )}
 
         <div className="table-wrapper">
-          {attendance.length === 0 ? (
+          {filtered.length === 0 ? (
             <div className="empty-state">
-              <div style={{fontSize:'2em'}}>📋</div>
-              <p>Belum ada data absensi</p>
+              <div style={{ fontSize: '2em' }}>📋</div>
+              <p>Tidak ada data yang sesuai</p>
             </div>
           ) : (
             <table>
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>UID Kartu</th>
                   <th>Nama</th>
                   <th>Kelas</th>
+                  <th>UID Kartu</th>
                   <th>Waktu</th>
                   <th>Tanggal</th>
                   <th>Status</th>
@@ -121,20 +243,21 @@ const Dashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {attendance.map((r, i) => (
-                  <tr key={r.id}>
-                    <td style={{color:'#a0aec0', fontSize:'0.85em'}}>{i + 1}</td>
-                    <td><span className="uid-tag">{r.uid}</span></td>
-                    <td style={{fontWeight: 600}}>{r.name}</td>
+                {filtered.map((r, i) => (
+                  <tr key={r.id} style={{
+                    background: r.status === 'unknown' ? '#fff5f5' : 'inherit'
+                  }}>
+                    <td style={{ color: '#a0aec0', fontSize: '0.85em' }}>{i + 1}</td>
+                    <td style={{ fontWeight: 600 }}>{r.name}</td>
                     <td>{r.class}</td>
-                    <td style={{fontFamily:'monospace'}}>{r.time || '--:--'}</td>
+                    <td><span className="uid-tag">{r.uid}</span></td>
+                    <td style={{ fontFamily: 'monospace' }}>{r.time || '--:--'}</td>
                     <td>{r.date || new Date(r.scanned_at).toLocaleDateString('id-ID')}</td>
                     <td>{statusBadge(r.attendance_status || r.status)}</td>
                     <td>{weatherIcon(r.weather)}</td>
                     <td>{r.temperature ? `${r.temperature}°C` : '-'}</td>
                   </tr>
                 ))}
-                
               </tbody>
             </table>
           )}

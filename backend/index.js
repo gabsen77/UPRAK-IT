@@ -4,6 +4,7 @@ const cors    = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt    = require('jsonwebtoken');
 const app     = express();
+const cron = require('node-cron');
 
 app.use(express.json());
 app.use(cors({
@@ -30,6 +31,18 @@ const authenticateToken = (req, res, next) => {
     next();
   });
 };
+
+// Reset attendance setiap hari jam 00:00
+// Hanya hapus data 'present', unknown tetap tersimpan
+cron.schedule('0 0 * * *', async () => {
+  console.log('Auto reset attendance...');
+  // Data tidak dihapus, hanya log saja
+  // Karena sudah ada filter DATE(scanned_at) = CURRENT_DATE
+  // Jadi otomatis reset sendiri setiap hari baru
+  console.log('Reset done - new day started');
+}, {
+  timezone: "Asia/Jakarta"
+});
 
 // -------------------------------------------------------
 // JAM MASUK & PULANG (server side)
@@ -181,6 +194,17 @@ app.post('/api/attendance', async (req, res) => {
   } catch (err) {
     console.error('DB Error:', err.message);
     res.status(500).json({ status: 'error', error: err.message });
+  }
+});
+
+// DELETE attendance by id
+app.delete('/api/attendance/:id', authenticateToken, adminOnly, async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query('DELETE FROM attendance WHERE id = $1', [id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
