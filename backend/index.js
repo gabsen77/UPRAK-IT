@@ -65,7 +65,7 @@ cron.schedule('30 7 * * 1-6', async () => {
       WHERE s.phone IS NOT NULL
       AND s.uid NOT IN (
         SELECT uid FROM attendance
-        WHERE DATE(scanned_at) = CURRENT_DATE
+        WHERE DATE(scanned_at AT TIME ZONE 'Asia/Jakarta') = CURRENT_DATE AT TIME ZONE 'Asia/Jakarta'
         AND status = 'present'
         AND attendance_status IN ('tepat_waktu', 'telat')
       )
@@ -220,35 +220,38 @@ app.post('/api/schedule/today', authenticateToken, adminOnly, async (req, res) =
 
 app.get('/api/students/today', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT
-        s.*,
-        masuk.attendance_status,
-        masuk.time       as scan_time,
-        masuk.scanned_at,
-        CASE WHEN masuk.id IS NOT NULL THEN true ELSE false END as hadir,
-        CASE WHEN pulang.id IS NOT NULL THEN true ELSE false END as sudah_pulang,
-        pulang.time as pulang_time
-      FROM students s
-      LEFT JOIN (
-        SELECT DISTINCT ON (uid) *
-        FROM attendance
-        WHERE DATE(scanned_at) = CURRENT_DATE
-          AND status = 'present'
-          AND attendance_status IN ('tepat_waktu', 'telat')
-        ORDER BY uid, scanned_at ASC
-      ) masuk ON masuk.uid = s.uid
-      LEFT JOIN (
-        SELECT DISTINCT ON (uid) *
-        FROM attendance
-        WHERE DATE(scanned_at) = CURRENT_DATE
-          AND status = 'present'
-          AND attendance_status = 'pulang'
-        ORDER BY uid, scanned_at ASC
-      ) pulang ON pulang.uid = s.uid
-      ORDER BY s.name ASC
+    const students = await pool.query('SELECT * FROM students ORDER BY name ASC');
+
+    const attendance = await pool.query(`
+      SELECT * FROM attendance
+      WHERE DATE(scanned_at AT TIME ZONE 'Asia/Jakarta') = 
+            CURRENT_DATE AT TIME ZONE 'Asia/Jakarta'
+      AND status = 'present'
+      ORDER BY scanned_at ASC
     `);
-    res.json(result.rows);
+
+    const result = students.rows.map(s => {
+      const masuk = attendance.rows.find(a =>
+        a.uid === s.uid &&
+        ['tepat_waktu', 'telat'].includes(a.attendance_status)
+      );
+      const pulang = attendance.rows.find(a =>
+        a.uid === s.uid &&
+        a.attendance_status === 'pulang'
+      );
+
+      return {
+        ...s,
+        attendance_status: masuk?.attendance_status || null,
+        scan_time:         masuk?.time || null,
+        scanned_at:        masuk?.scanned_at || null,
+        hadir:             !!masuk,
+        sudah_pulang:      !!pulang,
+        pulang_time:       pulang?.time || null,
+      };
+    });
+
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
