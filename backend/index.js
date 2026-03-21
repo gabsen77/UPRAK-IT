@@ -616,17 +616,22 @@ app.get('/api/export/excel', authenticateToken, async (req, res) => {
   const { startDate, endDate } = req.query;
   try {
     let query, params = [];
+
     if (startDate && endDate) {
-      query  = `SELECT name, class, uid, attendance_status, weather, temperature, humidity, time, date, scanned_at
-                FROM attendance WHERE status='present'
-                AND scanned_at>=$1::date AND scanned_at<($2::date+interval '1 day')
-                ORDER BY scanned_at DESC`;
-      params = [startDate, endDate];
+      // Pakai kolom date bukan scanned_at
+      query = `SELECT name, class, uid, attendance_status, weather, temperature, humidity, time, date, scanned_at
+               FROM attendance WHERE status='present'
+               AND date >= $1 AND date <= $2
+               ORDER BY scanned_at DESC`;
+      params = [
+        // Convert YYYY-MM-DD ke DD/MM/YYYY
+        startDate.split('-').reverse().join('/'),
+        endDate.split('-').reverse().join('/')
+      ];
     } else {
       query = `SELECT name, class, uid, attendance_status, weather, temperature, humidity, time, date, scanned_at
                FROM attendance WHERE status='present' ORDER BY scanned_at DESC`;
     }
-
     const result = await pool.query(query, params);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Tidak ada data' });
 
@@ -665,17 +670,21 @@ app.get('/api/export/pdf', authenticateToken, async (req, res) => {
   const { startDate, endDate } = req.query;
   try {
     let query, params = [];
+
     if (startDate && endDate) {
-      query  = `SELECT name, class, uid, attendance_status, weather, temperature, humidity, time, date, scanned_at
-                FROM attendance WHERE status='present'
-                AND scanned_at>=$1::date AND scanned_at<($2::date+interval '1 day')
-                ORDER BY scanned_at DESC`;
-      params = [startDate, endDate];
+      // Pakai kolom date bukan scanned_at
+      query = `SELECT name, class, uid, attendance_status, weather, temperature, humidity, time, date, scanned_at
+               FROM attendance WHERE status='present'
+               AND date >= $1 AND date <= $2
+               ORDER BY scanned_at DESC`;
+      params = [
+        startDate.split('-').reverse().join('/'),
+        endDate.split('-').reverse().join('/')
+      ];
     } else {
       query = `SELECT name, class, uid, attendance_status, weather, temperature, humidity, time, date, scanned_at
                FROM attendance WHERE status='present' ORDER BY scanned_at DESC`;
     }
-
     const result = await pool.query(query, params);
     const doc    = new PDFDocument({ margin: 40, size: 'A4' });
 
