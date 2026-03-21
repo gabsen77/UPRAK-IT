@@ -105,7 +105,7 @@ const Students = () => {
     return matchName && matchClass;
   });
 
-  const sudahHadir = todayStatus.filter(s => s.hadir).length;
+  const sudahHadir = todayStatus.filter(s => s.hadir || s.sudah_pulang).length;
   const belumHadir = students.length - sudahHadir;
 
   return (
@@ -269,24 +269,22 @@ const Students = () => {
                         background: !status ? '#fff9f0' : 'inherit'
                       }}>
                 <td>
-                  {status ? (
+                  {s.sudah_pulang ? (
+                    <div>
+                      <span className="badge badge-blue">Pulang</span>
+                      <div style={{ fontSize: '0.75em', color: '#a0aec0', marginTop: 2 }}>
+                        {s.pulang_time}
+                      </div>
+                    </div>
+                  ) : s.hadir ? (
                     <div>
                       <span className={`badge ${
-                        status.attendance_status === 'tepat_waktu' ? 'badge-green' :
-                        status.attendance_status === 'telat'       ? 'badge-yellow' :
-                        'badge-blue'
+                        s.attendance_status === 'tepat_waktu' ? 'badge-green' : 'badge-yellow'
                       }`}>
-                        {status.attendance_status === 'tepat_waktu' ? 'Tepat Waktu' :
-                        status.attendance_status === 'telat'       ? 'Telat' : 'Masuk'}
+                        {s.attendance_status === 'tepat_waktu' ? 'Tepat Waktu' : 'Telat'}
                       </span>
-                      {/* Tampilkan badge pulang jika sudah pulang */}
-                      {s.sudah_pulang && (
-                        <span className="badge badge-blue" style={{ marginLeft: 4 }}>
-                          Pulang {s.pulang_time}
-                        </span>
-                      )}
                       <div style={{ fontSize: '0.75em', color: '#a0aec0', marginTop: 2 }}>
-                        {status.scan_time}
+                        {s.scan_time}
                       </div>
                     </div>
                   ) : (

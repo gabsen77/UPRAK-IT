@@ -226,19 +226,25 @@ app.get('/api/students/today', authenticateToken, async (req, res) => {
         masuk.time as scan_time,
         masuk.scanned_at,
         CASE WHEN masuk.id IS NOT NULL THEN true ELSE false END as hadir,
-        pulang.id IS NOT NULL as sudah_pulang,
+        CASE WHEN pulang.id IS NOT NULL THEN true ELSE false END as sudah_pulang,
         pulang.time as pulang_time
       FROM students s
-      LEFT JOIN attendance masuk
-        ON s.uid = masuk.uid
-        AND DATE(masuk.scanned_at) = CURRENT_DATE
-        AND masuk.status = 'present'
-        AND masuk.attendance_status IN ('tepat_waktu', 'telat')
-      LEFT JOIN attendance pulang
-        ON s.uid = pulang.uid
-        AND DATE(pulang.scanned_at) = CURRENT_DATE
-        AND pulang.status = 'present'
-        AND pulang.attendance_status = 'pulang'
+      LEFT JOIN LATERAL (
+        SELECT * FROM attendance
+        WHERE uid = s.uid
+        AND DATE(scanned_at) = CURRENT_DATE
+        AND status = 'present'
+        AND attendance_status IN ('tepat_waktu', 'telat')
+        LIMIT 1
+      ) masuk ON true
+      LEFT JOIN LATERAL (
+        SELECT * FROM attendance
+        WHERE uid = s.uid
+        AND DATE(scanned_at) = CURRENT_DATE
+        AND status = 'present'
+        AND attendance_status = 'pulang'
+        LIMIT 1
+      ) pulang ON true
       ORDER BY s.name ASC
     `);
     res.json(result.rows);
