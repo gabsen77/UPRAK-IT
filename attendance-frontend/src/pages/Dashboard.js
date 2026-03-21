@@ -279,11 +279,11 @@ const Dashboard = () => {
                     <td>{statusBadge(r.attendance_status || r.status)}</td>
                     <td>{weatherIcon(r.weather)}</td>
                     <td>{r.temperature ? `${r.temperature}°C` : '-'}</td>
+                    <td className="hide-mobile"><span className="uid-tag">{r.uid}</span></td>
+                    <td className="hide-mobile">{weatherIcon(r.weather)}</td>
+                    <td className="hide-mobile">{r.temperature ? `${r.temperature}°C` : '-'}</td>
                   </tr>
                 ))}
-                <td className="hide-mobile"><span className="uid-tag">{r.uid}</span></td>
-                <td className="hide-mobile">{weatherIcon(r.weather)}</td>
-                <td className="hide-mobile">{r.temperature ? `${r.temperature}°C` : '-'}</td>
               </tbody>
             </table>
           )}
