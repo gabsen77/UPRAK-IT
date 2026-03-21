@@ -14,14 +14,14 @@ const Students = () => {
   const [searchName,   setSearchName]   = useState('');
   const [searchClass,  setSearchClass]  = useState('');
 
-  const fetchAll = async () => {
-    const [s, t] = await Promise.all([
-      api.get('/students'),
-      api.get('/students/today'),
-    ]);
-    setStudents(s.data);
-    setTodayStatus(t.data);
-  };
+const fetchAll = async () => {
+  const [s, t] = await Promise.all([
+    api.get('/students'),
+    api.get('/students/today'),
+  ]);
+  setStudents(s.data);
+  setTodayStatus(t.data);
+};
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -29,7 +29,7 @@ const Students = () => {
     return todayStatus.find(t => t.uid === studentUid) || null;
   };
 
-  const kelasList = [...new Set(students.map(s => s.class))].sort();
+  const kelasList = [...new Set(todayStatus.map(s => s.class))].sort();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -99,14 +99,14 @@ const Students = () => {
   };
 
   // Filter dengan nama DAN kelas terpisah
-  const filtered = students.filter(s => {
+  const filtered = todayStatus.filter(s => {
     const matchName  = !searchName  || s.name.toLowerCase().includes(searchName.toLowerCase());
     const matchClass = !searchClass || s.class === searchClass;
     return matchName && matchClass;
   });
 
   const sudahHadir = todayStatus.filter(s => s.hadir || s.sudah_pulang).length;
-  const belumHadir = students.length - sudahHadir;
+  const belumHadir = todayStatus.filter(s => !s.hadir && !s.sudah_pulang).length;
 
   return (
     <div>
@@ -186,7 +186,7 @@ const Students = () => {
           <div className="card-header">
             <h3>Daftar Siswa</h3>
             <span style={{ fontSize: '0.85em', color: '#718096' }}>
-              {filtered.length} / {students.length} siswa
+              {filtered.length} / {todayStatus.length} siswa
             </span>
           </div>
 
@@ -266,7 +266,7 @@ const Students = () => {
                     const status = getStatus(s.uid);
                     return (
                       <tr key={s.id} style={{
-                        background: !status ? '#fff9f0' : 'inherit'
+                        background: !s.hadir && !s.sudah_pulang ? '#fff9f0' : 'inherit'
                       }}>
                 <td>
                   {s.sudah_pulang ? (
