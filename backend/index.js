@@ -46,6 +46,42 @@ cron.schedule('0 0 * * *', async () => {
   timezone: "Asia/Jakarta"
 });
 
+// -------- CRON: REMINDER BELUM ABSEN (tiap jam 07:30 WIB) --------
+// Jalankan 1 jam setelah batas jam masuk (06:30 + 1 jam = 07:30)
+// Ubah jadwal sesuai kebutuhan: '30 7 * * 1-6' = jam 07:30, Senin-Sabtu
+cron.schedule('30 7 * * 1-6', async () => {
+  console.log('Running late reminder cron...');
+  try {
+    // Ambil semua siswa yang BELUM absen hari ini
+    const result = await pool.query(`
+      SELECT s.* FROM students s
+      WHERE s.phone IS NOT NULL
+      AND s.uid NOT IN (
+        SELECT uid FROM attendance
+        WHERE DATE(scanned_at) = CURRENT_DATE
+        AND status = 'present'
+      )
+    `);
+
+    const today = new Date().toLocaleDateString('id-ID', {
+      day: '2-digit', month: '2-digit', year: 'numeric'
+    });
+
+    for (const student of result.rows) {
+      const message = `⚠️ Halo ${student.name}, kamu BELUM ABSEN hari ini (${today})!\n\nSegera lakukan absensi atau hubungi guru jika ada kendala. 🙏`;
+      await sendWA(student.phone, message);
+      // Delay 1 detik antar pesan agar tidak spam
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    console.log(`Late reminder sent to ${result.rows.length} students`);
+  } catch (err) {
+    console.error('Cron error:', err.message);
+  }
+}, {
+  timezone: 'Asia/Jakarta'
+});
+
 // -------------------------------------------------------
 // JAM MASUK & PULANG (server side)
 // Sesuaikan dengan jam di ESP32
@@ -142,15 +178,13 @@ app.delete('/api/auth/users/:id', authenticateToken, adminOnly, async (req, res)
 
 app.post('/api/attendance', async (req, res) => {
   const { uid, temperature, humidity, time, date, status, weather } = req.body;
-  console.log(`UID: ${uid} | Status: ${status} | Cuaca: ${weather} | Temp: ${temperature} | Hum: ${humidity}`);
+  console.log(`UID: ${uid} | Status: ${status} | Cuaca: ${weather}`);
 
   try {
     const studentResult = await pool.query(
-      'SELECT * FROM students WHERE uid = $1',
-      [uid]
+      'SELECT * FROM students WHERE uid = $1', [uid]
     );
 
-    // UID tidak dikenal
     if (studentResult.rows.length === 0) {
       await pool.query(
         `INSERT INTO attendance (uid, name, class, status, attendance_status, weather, temperature, humidity, time, date, scanned_at)
@@ -162,7 +196,6 @@ app.post('/api/attendance', async (req, res) => {
 
     const student = studentResult.rows[0];
 
-    // Cek apakah sudah absen hari ini
     const alreadyScanned = await pool.query(
       `SELECT * FROM attendance 
        WHERE uid = $1 
@@ -179,12 +212,24 @@ app.post('/api/attendance', async (req, res) => {
       });
     }
 
-    // Simpan absensi dengan status kehadiran dan cuaca
     await pool.query(
       `INSERT INTO attendance (uid, name, class, status, attendance_status, weather, temperature, humidity, time, date, scanned_at)
        VALUES ($1, $2, $3, 'present', $4, $5, $6, $7, $8, $9, NOW())`,
       [uid, student.name, student.class, status, weather, temperature, humidity, time, date]
     );
+
+    // -------- KIRIM WA OTOMATIS SETELAH ABSEN --------
+    if (student.phone) {
+      const statusLabel = status === 'tepat_waktu' ? 'Tepat Waktu' :
+                          status === 'telat'        ? 'TELAT'       :
+                          status === 'pulang'       ? 'Pulang'      : status;
+
+      const waMessage = status === 'telat'
+        ? `Halo ${student.name}, absensi kamu TERCATAT TELAT pada ${time} hari ini (${date}).\n\nHarap segera melapor ke guru piket. 🙏`
+        : `Halo ${student.name}, absensi kamu BERHASIL DICATAT!\n\n📋 Detail:\n- Nama: ${student.name}\n- Kelas: ${student.class}\n- Jam: ${time}\n- Tanggal: ${date}\n- Status: ${statusLabel}\n\nTerima kasih! 😊`;
+
+      sendWA(student.phone, waMessage);
+    }
 
     return res.json({
       status:            'found',
@@ -491,6 +536,22 @@ app.post('/api/notify/whatsapp', authenticateToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// -------- HELPER KIRIM WA --------
+const sendWA = async (phone, message) => {
+  if (!phone) return;
+  try {
+    await axiosLib.post('https://api.fonnte.com/send', {
+      target:  phone,
+      message: message,
+    }, {
+      headers: { 'Authorization': process.env.FONNTE_TOKEN }
+    });
+    console.log(`WA sent to ${phone}`);
+  } catch (err) {
+    console.error(`WA failed to ${phone}:`, err.message);
+  }
+};
 
 app.listen(3001, '0.0.0.0', () => {
   console.log('Server running on port 3001');

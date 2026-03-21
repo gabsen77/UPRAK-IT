@@ -11,7 +11,8 @@ const Students = () => {
   const [message,      setMessage]      = useState('');
   const [msgType,      setMsgType]      = useState('');
   const [editId,       setEditId]       = useState(null);
-  const [search,       setSearch]       = useState('');
+  const [searchName,   setSearchName]   = useState('');
+  const [searchClass,  setSearchClass]  = useState('');
 
   const fetchAll = async () => {
     const [s, t] = await Promise.all([
@@ -25,9 +26,10 @@ const Students = () => {
   useEffect(() => { fetchAll(); }, []);
 
   const getStatus = (studentUid) => {
-    const s = todayStatus.find(t => t.uid === studentUid);
-    return s || null;
+    return todayStatus.find(t => t.uid === studentUid) || null;
   };
+
+  const kelasList = [...new Set(students.map(s => s.class))].sort();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -69,11 +71,11 @@ const Students = () => {
     setMessage('');
   };
 
-  const handleDelete = async (id, name) => {
-    if (!window.confirm(`Yakin hapus ${name}?`)) return;
+  const handleDelete = async (id, studentName) => {
+    if (!window.confirm(`Yakin hapus ${studentName}?`)) return;
     try {
       await api.delete(`/students/${id}`);
-      setMessage(`${name} berhasil dihapus.`);
+      setMessage(`${studentName} berhasil dihapus.`);
       setMsgType('success');
       fetchAll();
     } catch (err) {
@@ -82,27 +84,29 @@ const Students = () => {
     }
   };
 
-  const sendWA = async (s) => {
+  const sendWAManual = async (s) => {
     if (!s.phone) { alert('Nomor WA tidak ada!'); return; }
     const status = getStatus(s.uid);
     const msg = status
-      ? `Halo, ${s.name} sudah absen pada ${status.scan_time} dengan status ${status.attendance_status === 'tepat_waktu' ? 'Tepat Waktu' : 'Telat'}.`
-      : `Halo, ${s.name} BELUM absen hari ini. Mohon segera hadir.`;
+      ? `Halo ${s.name}, absensi kamu sudah tercatat pada ${status.scan_time} dengan status ${status.attendance_status === 'tepat_waktu' ? 'Tepat Waktu' : 'Telat'}.`
+      : `Halo ${s.name}, kamu BELUM absen hari ini. Segera lakukan absensi! ⚠️`;
     try {
       await api.post('/notify/whatsapp', { phone: s.phone, message: msg });
       alert(`Pesan WA berhasil dikirim ke ${s.phone}`);
     } catch (err) {
-      alert('Gagal kirim WA');
+      alert('Gagal kirim WA: ' + (err.response?.data?.error || err.message));
     }
   };
 
-  const filtered = students.filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.class.toLowerCase().includes(search.toLowerCase())
-  );
+  // Filter dengan nama DAN kelas terpisah
+  const filtered = students.filter(s => {
+    const matchName  = !searchName  || s.name.toLowerCase().includes(searchName.toLowerCase());
+    const matchClass = !searchClass || s.class === searchClass;
+    return matchName && matchClass;
+  });
 
-  const sudahHadir  = todayStatus.filter(s => s.hadir).length;
-  const belumHadir  = students.length - sudahHadir;
+  const sudahHadir = todayStatus.filter(s => s.hadir).length;
+  const belumHadir = students.length - sudahHadir;
 
   return (
     <div>
@@ -111,7 +115,7 @@ const Students = () => {
         <p>Kelola data siswa dan pantau kehadiran hari ini</p>
       </div>
 
-      {/* Summary hari ini */}
+      {/* Stat cards */}
       <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 20 }}>
         <div className="stat-card blue">
           <div className="stat-icon">👥</div>
@@ -128,7 +132,7 @@ const Students = () => {
       </div>
 
       <div className="students-layout">
-        {/* Form */}
+        {/* Form tambah/edit */}
         <div className="card">
           <div className="card-header">
             <h3>{editId ? 'Edit Data Siswa' : 'Tambah Siswa Baru'}</h3>
@@ -143,19 +147,27 @@ const Students = () => {
             <form onSubmit={handleSubmit}>
               <div className="form-group">
                 <label>UID Kartu RFID</label>
-                <input type="text" value={uid} onChange={e => setUid(e.target.value)} placeholder="Contoh: D5 32 86 46"/>
+                <input type="text" value={uid}
+                  onChange={e => setUid(e.target.value)}
+                  placeholder="Contoh: D5 32 86 46"/>
               </div>
               <div className="form-group">
                 <label>Nama Lengkap</label>
-                <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Nama siswa"/>
+                <input type="text" value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Nama siswa"/>
               </div>
               <div className="form-group">
                 <label>Kelas</label>
-                <input type="text" value={studentClass} onChange={e => setStudentClass(e.target.value)} placeholder="Contoh: XII6-03"/>
+                <input type="text" value={studentClass}
+                  onChange={e => setStudentClass(e.target.value)}
+                  placeholder="Contoh: XII6-03"/>
               </div>
               <div className="form-group">
                 <label>Nomor WhatsApp</label>
-                <input type="text" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Contoh: 628123456789"/>
+                <input type="text" value={phone}
+                  onChange={e => setPhone(e.target.value)}
+                  placeholder="Contoh: 628123456789"/>
               </div>
               <button type="submit" className="btn-primary">
                 {editId ? '💾 Simpan Perubahan' : '+ Tambah Siswa'}
@@ -169,82 +181,148 @@ const Students = () => {
           </div>
         </div>
 
-        {/* List */}
+        {/* Tabel siswa */}
         <div className="card">
           <div className="card-header">
             <h3>Daftar Siswa</h3>
-            <span style={{ fontSize: '0.85em', color: '#718096' }}>{students.length} siswa</span>
+            <span style={{ fontSize: '0.85em', color: '#718096' }}>
+              {filtered.length} / {students.length} siswa
+            </span>
           </div>
-          <div className="card-body" style={{ padding: '12px 16px' }}>
+
+          {/* Filter terpisah */}
+          <div style={{
+            padding: '12px 16px',
+            display: 'flex',
+            gap: 10,
+            borderBottom: '1px solid #f1f5f9'
+          }}>
+            {/* Filter nama */}
             <input
               type="text"
-              placeholder="🔍 Cari nama atau kelas..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
+              placeholder="🔍 Cari nama..."
+              value={searchName}
+              onChange={e => setSearchName(e.target.value)}
               style={{
-                width: '100%', padding: '8px 12px', marginBottom: 12,
-                border: '1px solid #e2e8f0', borderRadius: '8px',
-                fontSize: '0.9em', outline: 'none', boxSizing: 'border-box'
+                flex: 1, padding: '8px 12px',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px', fontSize: '0.88em',
+                outline: 'none',
               }}
             />
+
+            {/* Filter kelas dropdown */}
+            <select
+              value={searchClass}
+              onChange={e => setSearchClass(e.target.value)}
+              style={{
+                padding: '8px 12px',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px', fontSize: '0.88em',
+                outline: 'none', minWidth: 130,
+              }}
+            >
+              <option value="">Semua Kelas</option>
+              {kelasList.map(k => (
+                <option key={k} value={k}>{k}</option>
+              ))}
+            </select>
+
+            {/* Reset filter */}
+            {(searchName || searchClass) && (
+              <button
+                onClick={() => { setSearchName(''); setSearchClass(''); }}
+                style={{
+                  padding: '8px 12px',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px', fontSize: '0.88em',
+                  cursor: 'pointer', background: '#f8fafc',
+                  color: '#718096',
+                }}
+              >✕</button>
+            )}
           </div>
+
           <div style={{ padding: 0 }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Status</th>
-                  <th>Nama</th>
-                  <th>Kelas</th>
-                  <th>UID</th>
-                  <th>WA</th>
-                  <th>Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(s => {
-                  const status = getStatus(s.uid);
-                  return (
-                    <tr key={s.id} style={{ background: !status ? '#fff9f0' : 'inherit' }}>
-                      <td>
-                        {status ? (
-                          <span className={`badge ${status.attendance_status === 'tepat_waktu' ? 'badge-green' : 'badge-yellow'}`}>
-                            {status.attendance_status === 'tepat_waktu' ? 'Tepat Waktu' : 'Telat'} {status.scan_time}
-                          </span>
-                        ) : (
-                          <span className="badge badge-red">Belum Absen</span>
-                        )}
-                      </td>
-                      <td style={{ fontWeight: 600 }}>{s.name}</td>
-                      <td>{s.class}</td>
-                      <td><span className="uid-tag">{s.uid}</span></td>
-                      <td style={{ fontSize: '0.82em', color: '#718096' }}>{s.phone || '-'}</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button onClick={() => handleEdit(s)} style={{
-                            background: '#eff6ff', color: '#1e40af',
-                            border: '1px solid #bfdbfe', padding: '4px 8px',
-                            borderRadius: '5px', fontSize: '0.78em',
-                            fontWeight: 600, cursor: 'pointer',
-                          }}>Edit</button>
-                          <button onClick={() => sendWA(s)} style={{
-                            background: '#f0fdf4', color: '#166534',
-                            border: '1px solid #bbf7d0', padding: '4px 8px',
-                            borderRadius: '5px', fontSize: '0.78em',
-                            fontWeight: 600, cursor: 'pointer',
-                          }}>WA</button>
-                          <button onClick={() => handleDelete(s.id, s.name)} style={{
-                            background: '#fef2f2', color: '#dc2626',
-                            border: '1px solid #fecaca', padding: '4px 8px',
-                            borderRadius: '5px', fontSize: '0.78em',
-                            fontWeight: 600, cursor: 'pointer',
-                          }}>Hapus</button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            {filtered.length === 0 ? (
+              <div className="empty-state">
+                <div style={{ fontSize: '2em' }}>👤</div>
+                <p>Tidak ada siswa yang cocok</p>
+              </div>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Status Hari Ini</th>
+                    <th>Nama</th>
+                    <th>Kelas</th>
+                    <th>UID</th>
+                    <th>WA</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(s => {
+                    const status = getStatus(s.uid);
+                    return (
+                      <tr key={s.id} style={{
+                        background: !status ? '#fff9f0' : 'inherit'
+                      }}>
+                        <td>
+                          {status ? (
+                            <div>
+                              <span className={`badge ${
+                                status.attendance_status === 'tepat_waktu' ? 'badge-green' :
+                                status.attendance_status === 'telat'       ? 'badge-yellow' :
+                                'badge-blue'
+                              }`}>
+                                {status.attendance_status === 'tepat_waktu' ? 'Tepat Waktu' :
+                                 status.attendance_status === 'telat'       ? 'Telat' : 'Pulang'}
+                              </span>
+                              <div style={{ fontSize: '0.75em', color: '#a0aec0', marginTop: 2 }}>
+                                {status.scan_time}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="badge badge-red">Belum Absen</span>
+                          )}
+                        </td>
+                        <td style={{ fontWeight: 600 }}>{s.name}</td>
+                        <td>{s.class}</td>
+                        <td><span className="uid-tag">{s.uid}</span></td>
+                        <td style={{ fontSize: '0.82em', color: '#718096' }}>
+                          {s.phone || <span style={{ color: '#e2e8f0' }}>-</span>}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button onClick={() => handleEdit(s)} style={{
+                              background: '#eff6ff', color: '#1e40af',
+                              border: '1px solid #bfdbfe', padding: '4px 8px',
+                              borderRadius: '5px', fontSize: '0.78em',
+                              fontWeight: 600, cursor: 'pointer',
+                            }}>Edit</button>
+                            <button onClick={() => sendWAManual(s)} style={{
+                              background: s.phone ? '#f0fdf4' : '#f8fafc',
+                              color: s.phone ? '#166534' : '#a0aec0',
+                              border: `1px solid ${s.phone ? '#bbf7d0' : '#e2e8f0'}`,
+                              padding: '4px 8px', borderRadius: '5px',
+                              fontSize: '0.78em', fontWeight: 600,
+                              cursor: s.phone ? 'pointer' : 'not-allowed',
+                            }}>WA</button>
+                            <button onClick={() => handleDelete(s.id, s.name)} style={{
+                              background: '#fef2f2', color: '#dc2626',
+                              border: '1px solid #fecaca', padding: '4px 8px',
+                              borderRadius: '5px', fontSize: '0.78em',
+                              fontWeight: 600, cursor: 'pointer',
+                            }}>Hapus</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </div>
