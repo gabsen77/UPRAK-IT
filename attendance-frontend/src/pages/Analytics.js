@@ -9,6 +9,14 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
 
+const getTodayStr = () => {
+  const now = new Date();
+  const d = now.getDate().toString().padStart(2, '0');
+  const m = (now.getMonth() + 1).toString().padStart(2, '0');
+  const y = now.getFullYear();
+  return `${d}/${m}/${y}`;
+};
+
 const Analytics = () => {
   const [weatherData, setWeatherData] = useState(null);
   const [dailyData,   setDailyData]   = useState(null);
@@ -25,9 +33,8 @@ const Analytics = () => {
         ]);
 
         // ---- Pie chart: status kehadiran hari ini ----
-        const today = att.data.filter(r =>
-          new Date(r.scanned_at).toDateString() === new Date().toDateString()
-        );
+        const today = att.data.filter(r => r.date === getTodayStr());
+
         const tepat  = today.filter(r => r.attendance_status === 'tepat_waktu').length;
         const telat  = today.filter(r => r.attendance_status === 'telat').length;
         const pulang = today.filter(r => r.attendance_status === 'pulang').length;

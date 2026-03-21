@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axiosConfig';
 
+const getTodayStr = () => {
+  const now = new Date();
+  const d = now.getDate().toString().padStart(2, '0');
+  const m = (now.getMonth() + 1).toString().padStart(2, '0');
+  const y = now.getFullYear();
+  return `${d}/${m}/${y}`;
+};
+
 const statusBadge = (status) => {
   const map = {
     tepat_waktu: { class: 'badge-green',  label: 'Tepat Waktu' },
@@ -56,9 +64,7 @@ const Dashboard = () => {
     };
   }, []);
 
-  const today = attendance.filter(r =>
-    new Date(r.scanned_at).toDateString() === new Date().toDateString()
-  );
+  const today = attendance.filter(r => r.date === getTodayStr());
 
   const stats = {
     total:       today.filter(r => r.status === 'present').length,
