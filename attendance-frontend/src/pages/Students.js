@@ -268,7 +268,6 @@ const Students = () => {
                       <tr key={s.id} style={{
                         background: !status ? '#fff9f0' : 'inherit'
                       }}>
-                        // Di bagian render status di tabel, ganti dengan ini:
                 <td>
                   {status ? (
                     <div>
