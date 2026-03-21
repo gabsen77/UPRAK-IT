@@ -41,7 +41,19 @@ const Dashboard = () => {
   useEffect(() => {
     fetchAttendance();
     const interval = setInterval(fetchAttendance, 5000);
-    return () => clearInterval(interval);
+
+    // Cek pergantian hari, reload halaman
+    const checkMidnight = setInterval(() => {
+      const now = new Date();
+      if (now.getHours() === 0 && now.getMinutes() === 0) {
+        window.location.reload();
+      }
+    }, 60000); // cek tiap 1 menit
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(checkMidnight);
+    };
   }, []);
 
   const today = attendance.filter(r =>
