@@ -459,6 +459,7 @@ app.get('/api/students/today', authenticateToken, async (req, res) => {
         ON s.uid = a.uid 
         AND DATE(a.scanned_at) = CURRENT_DATE
         AND a.status = 'present'
+        AND a.attendance_status IN ('tepat_waktu', 'telat')
       ORDER BY s.name ASC
     `);
     res.json(result.rows);
@@ -673,17 +674,61 @@ app.get('/api/students/:id/rekap', authenticateToken, async (req, res) => {
     query += ' ORDER BY scanned_at DESC';
 
     const attendance = await pool.query(query, params);
-
-    // Hitung statistik
     const rows = attendance.rows;
+
+    // Hitung statistik — pulang tidak dihitung sebagai hadir masuk
     const stats = {
-      total:       rows.length,
+      total:       rows.filter(r => r.attendance_status !== 'pulang').length,
       tepat_waktu: rows.filter(r => r.attendance_status === 'tepat_waktu').length,
       telat:       rows.filter(r => r.attendance_status === 'telat').length,
       pulang:      rows.filter(r => r.attendance_status === 'pulang').length,
     };
 
     res.json({ student, attendance: rows, stats });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Summary semua siswa — fix juga di sini
+app.get('/api/rekap/summary', authenticateToken, async (req, res) => {
+  const { month, year } = req.query;
+
+  try {
+    let dateFilter = '';
+    const params = [];
+
+    if (month && year) {
+      dateFilter = `AND EXTRACT(MONTH FROM a.scanned_at) = $1
+                    AND EXTRACT(YEAR FROM a.scanned_at)  = $2`;
+      params.push(month, year);
+    }
+
+    const result = await pool.query(`
+      SELECT
+        s.id,
+        s.name,
+        s.class,
+        s.uid,
+        s.phone,
+        COUNT(a.id) FILTER (WHERE a.attendance_status = 'tepat_waktu') as tepat_waktu,
+        COUNT(a.id) FILTER (WHERE a.attendance_status = 'telat')       as telat,
+        COUNT(a.id) FILTER (WHERE a.attendance_status = 'pulang')      as pulang,
+        COUNT(a.id) FILTER (
+          WHERE a.status = 'present'
+          AND a.attendance_status != 'pulang'
+        ) as total_hadir,
+        MAX(a.scanned_at) as last_scan
+      FROM students s
+      LEFT JOIN attendance a ON s.uid = a.uid
+        AND a.status = 'present'
+        ${dateFilter}
+      GROUP BY s.id, s.name, s.class, s.uid, s.phone
+      ORDER BY s.name ASC
+    `, params);
+
+    res.json(result.rows);
 
   } catch (err) {
     res.status(500).json({ error: err.message });
