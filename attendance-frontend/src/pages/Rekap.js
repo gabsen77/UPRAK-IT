@@ -50,7 +50,7 @@ const Rekap = () => {
     }
   };
 
-  useEffect(() => { fetchSummary(); }, [month, year]);
+    useEffect(() => { fetchSummary(); }, [month, year]);
 
   const months = [
     'Januari','Februari','Maret','April','Mei','Juni',

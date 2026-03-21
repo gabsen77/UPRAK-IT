@@ -4,7 +4,6 @@ import api from '../api/axiosConfig';
 const BASE_URL = 'https://uprak-it-production.up.railway.app/api';
 
 const Settings = () => {
-  const now = new Date();
 
   // -------- PASSWORD STATE --------
   const [currentPw,  setCurrentPw]  = useState('');
