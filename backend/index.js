@@ -449,18 +449,17 @@ app.get('/api/schedule/today', authenticateToken, async (req, res) => {
 app.post('/api/schedule/today', authenticateToken, adminOnly, async (req, res) => {
   const { jam_masuk_h, jam_masuk_m, jam_telat_h, jam_telat_m, jam_pulang_h, jam_pulang_m } = req.body;
   try {
-    const today = new Date().toLocaleDateString('id-ID', {
-      day:'2-digit', month:'2-digit', year:'numeric'
-    }).split('/').reverse().join('/');
-
     await pool.query(`
       INSERT INTO schedule_override (date, jam_masuk_h, jam_masuk_m, jam_telat_h, jam_telat_m, jam_pulang_h, jam_pulang_m)
-      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      VALUES (
+        TO_CHAR(NOW() AT TIME ZONE 'Asia/Jakarta', 'DD/MM/YYYY'),
+        $1,$2,$3,$4,$5,$6
+      )
       ON CONFLICT (date) DO UPDATE SET
-        jam_masuk_h=$2, jam_masuk_m=$3,
-        jam_telat_h=$4, jam_telat_m=$5,
-        jam_pulang_h=$6, jam_pulang_m=$7
-    `, [today, jam_masuk_h, jam_masuk_m, jam_telat_h, jam_telat_m, jam_pulang_h, jam_pulang_m]);
+        jam_masuk_h=$1, jam_masuk_m=$2,
+        jam_telat_h=$3, jam_telat_m=$4,
+        jam_pulang_h=$5, jam_pulang_m=$6
+    `, [jam_masuk_h, jam_masuk_m, jam_telat_h, jam_telat_m, jam_pulang_h, jam_pulang_m]);
 
     res.json({ success: true });
   } catch (err) {
@@ -574,20 +573,21 @@ const sendWA = async (phone, message) => {
 // Schedule publik untuk ESP32 (tidak perlu token)
 app.get('/api/schedule/today/public', async (req, res) => {
   try {
-    const today = new Date().toLocaleDateString('id-ID', {
-      day:'2-digit', month:'2-digit', year:'numeric'
-    }).split('/').reverse().join('/');
-
+    // Gunakan DATE(NOW()) langsung di PostgreSQL
+    // Bukan string format manual yang bisa berbeda
     const result = await pool.query(
-      'SELECT * FROM schedule_override WHERE date = $1', [today]
+      `SELECT * FROM schedule_override 
+       WHERE date = TO_CHAR(NOW() AT TIME ZONE 'Asia/Jakarta', 'DD/MM/YYYY')`
     );
 
     if (result.rows.length > 0) {
+      console.log('Schedule override found:', result.rows[0]);
       res.json(result.rows[0]);
     } else {
+      console.log('No schedule override, using default');
       res.json({
-        jam_masuk_h: 6,  jam_masuk_m: 30,
-        jam_telat_h: 6,  jam_telat_m: 30,
+        jam_masuk_h:  6,  jam_masuk_m:  30,
+        jam_telat_h:  6,  jam_telat_m:  30,
         jam_pulang_h: 15, jam_pulang_m: 20
       });
     }
