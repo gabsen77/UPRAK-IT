@@ -13,16 +13,27 @@ const statusBadge = (status) => {
 
 const Rekap = () => {
   const now = new Date();
-  const [summary,     setSummary]     = useState([]);
-  const [selected,    setSelected]    = useState(null);
-  const [detail,      setDetail]      = useState(null);
-  const [loading,     setLoading]     = useState(false);
-  const [loadingDetail, setLoadingDetail] = useState(false);
-  const [month,       setMonth]       = useState(String(now.getMonth() + 1));
-  const [year,        setYear]        = useState(String(now.getFullYear()));
-  const [search,      setSearch]      = useState('');
-  const [searchClass, setSearchClass] = useState('');
 
+  const [summary,       setSummary]       = useState([]);
+  const [selected,      setSelected]      = useState(null);
+  const [detail,        setDetail]        = useState(null);
+  const [loading,       setLoading]       = useState(false);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [month,         setMonth]         = useState(String(now.getMonth() + 1));
+  const [year,          setYear]          = useState(String(now.getFullYear()));
+  const [search,        setSearch]        = useState('');
+  const [searchClass,   setSearchClass]   = useState('');
+
+  const months = [
+    'Januari','Februari','Maret','April','Mei','Juni',
+    'Juli','Agustus','September','Oktober','November','Desember'
+  ];
+
+  const years = Array.from({ length: 5 }, (_, i) =>
+    String(now.getFullYear() - i)
+  );
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchSummary = async () => {
     setLoading(true);
     try {
@@ -34,6 +45,11 @@ const Rekap = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month, year]);
 
   const fetchDetail = async (student) => {
     setSelected(student);
@@ -49,17 +65,6 @@ const Rekap = () => {
       setLoadingDetail(false);
     }
   };
-
-    useEffect(() => { fetchSummary(); }, [month, year]);
-
-  const months = [
-    'Januari','Februari','Maret','April','Mei','Juni',
-    'Juli','Agustus','September','Oktober','November','Desember'
-  ];
-
-  const years = Array.from({ length: 5 }, (_, i) =>
-    String(now.getFullYear() - i)
-  );
 
   const kelasList = [...new Set(summary.map(s => s.class))].sort();
 
@@ -81,6 +86,14 @@ const Rekap = () => {
     return '#f87171';
   };
 
+  const selectStyle = {
+    padding: '8px 12px',
+    border: '1px solid #e2e8f0',
+    borderRadius: 8,
+    fontSize: '0.9em',
+    outline: 'none',
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -88,33 +101,51 @@ const Rekap = () => {
         <p>Histori kehadiran lengkap per siswa</p>
       </div>
 
-      {/* Filter bulan & tahun */}
+      {/* Filter */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-body" style={{
           display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center'
         }}>
-          <select value={month} onChange={e => { setMonth(e.target.value); setDetail(null); }}
-            style={{ padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.9em', outline: 'none' }}>
+          <select value={month}
+            onChange={e => { setMonth(e.target.value); setDetail(null); setSelected(null); }}
+            style={selectStyle}>
             {months.map((m, i) => (
               <option key={i} value={String(i + 1)}>{m}</option>
             ))}
           </select>
 
-          <select value={year} onChange={e => { setYear(e.target.value); setDetail(null); }}
-            style={{ padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.9em', outline: 'none' }}>
+          <select value={year}
+            onChange={e => { setYear(e.target.value); setDetail(null); setSelected(null); }}
+            style={selectStyle}>
             {years.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
 
-          <input type="text" placeholder="🔍 Cari nama..."
-            value={search} onChange={e => setSearch(e.target.value)}
-            style={{ flex: 1, minWidth: 160, padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.9em', outline: 'none' }}
+          <input
+            type="text"
+            placeholder="🔍 Cari nama..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{
+              flex: 1, minWidth: 160, padding: '8px 12px',
+              border: '1px solid #e2e8f0', borderRadius: 8,
+              fontSize: '0.9em', outline: 'none',
+            }}
           />
 
-          <select value={searchClass} onChange={e => setSearchClass(e.target.value)}
-            style={{ padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.9em', outline: 'none', minWidth: 130 }}>
+          <select value={searchClass} onChange={e => setSearchClass(e.target.value)} style={{ ...selectStyle, minWidth: 130 }}>
             <option value="">Semua Kelas</option>
             {kelasList.map(k => <option key={k} value={k}>{k}</option>)}
           </select>
+
+          {(search || searchClass) && (
+            <button
+              onClick={() => { setSearch(''); setSearchClass(''); }}
+              style={{
+                padding: '8px 12px', border: '1px solid #e2e8f0',
+                borderRadius: 8, fontSize: '0.88em', cursor: 'pointer',
+                background: '#f8fafc', color: '#718096',
+              }}>✕ Reset</button>
+          )}
 
           <span style={{ fontSize: '0.85em', color: '#718096' }}>
             {filtered.length} siswa
@@ -122,17 +153,24 @@ const Rekap = () => {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: detail ? '1fr 1fr' : '1fr', gap: 20 }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: detail ? '1fr 1fr' : '1fr',
+        gap: 20,
+      }}>
 
-        {/* Tabel summary semua siswa */}
+        {/* Tabel summary */}
         <div className="card">
           <div className="card-header">
             <h3>Rekap {months[Number(month) - 1]} {year}</h3>
             {detail && (
-              <button onClick={() => { setDetail(null); setSelected(null); }}
-                style={{ background: '#f1f5f9', border: 'none', padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: '0.85em' }}>
-                Tutup detail
-              </button>
+              <button
+                onClick={() => { setDetail(null); setSelected(null); }}
+                style={{
+                  background: '#f1f5f9', border: 'none',
+                  padding: '5px 12px', borderRadius: 6,
+                  cursor: 'pointer', fontSize: '0.85em',
+                }}>Tutup detail</button>
             )}
           </div>
 
@@ -156,11 +194,11 @@ const Rekap = () => {
                     <tr><td colSpan={6}>
                       <div className="empty-state">
                         <div style={{ fontSize: '2em' }}>📋</div>
-                        <p>Tidak ada data</p>
+                        <p>Tidak ada data bulan ini</p>
                       </div>
                     </td></tr>
                   ) : filtered.map(s => {
-                    const pct = getPercentage(s);
+                    const pct        = getPercentage(s);
                     const isSelected = selected?.id === s.id;
                     return (
                       <tr key={s.id}
@@ -168,7 +206,9 @@ const Rekap = () => {
                         style={{
                           cursor: 'pointer',
                           background: isSelected ? '#eff6ff' : 'inherit',
-                          borderLeft: isSelected ? '3px solid #1a56db' : '3px solid transparent',
+                          borderLeft: isSelected
+                            ? '3px solid #1a56db'
+                            : '3px solid transparent',
                         }}
                       >
                         <td style={{ fontWeight: 600 }}>{s.name}</td>
@@ -184,20 +224,23 @@ const Rekap = () => {
                             {s.telat}
                           </span>
                         </td>
-                        <td style={{ minWidth: 100 }}>
+                        <td style={{ minWidth: 110 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <div style={{
-                              flex: 1, height: 6, background: '#f1f5f9',
-                              borderRadius: 3, overflow: 'hidden'
+                              flex: 1, height: 6,
+                              background: '#f1f5f9',
+                              borderRadius: 3, overflow: 'hidden',
                             }}>
                               <div style={{
                                 width: `${pct}%`, height: '100%',
                                 background: getBarColor(pct),
                                 borderRadius: 3,
-                                transition: 'width 0.3s'
+                                transition: 'width 0.3s',
                               }}/>
                             </div>
-                            <span style={{ fontSize: '0.78em', color: '#718096', minWidth: 30 }}>
+                            <span style={{
+                              fontSize: '0.78em', color: '#718096', minWidth: 34
+                            }}>
                               {pct}%
                             </span>
                           </div>
@@ -226,21 +269,31 @@ const Rekap = () => {
             {/* Stat mini */}
             <div style={{
               display: 'grid', gridTemplateColumns: 'repeat(3,1fr)',
-              gap: 10, padding: '12px 16px', borderBottom: '1px solid #f1f5f9'
+              gap: 10, padding: '12px 16px',
+              borderBottom: '1px solid #f1f5f9',
             }}>
-              <div style={{ textAlign: 'center', padding: 10, background: '#ecfdf5', borderRadius: 8 }}>
+              <div style={{
+                textAlign: 'center', padding: 10,
+                background: '#ecfdf5', borderRadius: 8,
+              }}>
                 <div style={{ fontSize: '1.6em', fontWeight: 700, color: '#10b981' }}>
                   {detail.stats.tepat_waktu}
                 </div>
                 <div style={{ fontSize: '0.75em', color: '#065f46' }}>Tepat Waktu</div>
               </div>
-              <div style={{ textAlign: 'center', padding: 10, background: '#fffbeb', borderRadius: 8 }}>
+              <div style={{
+                textAlign: 'center', padding: 10,
+                background: '#fffbeb', borderRadius: 8,
+              }}>
                 <div style={{ fontSize: '1.6em', fontWeight: 700, color: '#f59e0b' }}>
                   {detail.stats.telat}
                 </div>
                 <div style={{ fontSize: '0.75em', color: '#92400e' }}>Telat</div>
               </div>
-              <div style={{ textAlign: 'center', padding: 10, background: '#eff6ff', borderRadius: 8 }}>
+              <div style={{
+                textAlign: 'center', padding: 10,
+                background: '#eff6ff', borderRadius: 8,
+              }}>
                 <div style={{ fontSize: '1.6em', fontWeight: 700, color: '#3b82f6' }}>
                   {detail.stats.total}
                 </div>
@@ -274,10 +327,12 @@ const Rekap = () => {
                         <td style={{ fontFamily: 'monospace', fontSize: '0.85em' }}>
                           {r.date || new Date(r.scanned_at).toLocaleDateString('id-ID')}
                         </td>
-                        <td style={{ fontFamily: 'monospace' }}>{r.time || '--:--'}</td>
+                        <td style={{ fontFamily: 'monospace' }}>
+                          {r.time || '--:--'}
+                        </td>
                         <td>{statusBadge(r.attendance_status)}</td>
                         <td style={{ fontSize: '0.82em' }}>
-                          {{ hujan: '🌧️', lembab: '🌥️', panas: '☀️', normal: '⛅' }[r.weather] || '⛅'} {r.weather}
+                          {({ hujan: '🌧️', lembab: '🌥️', panas: '☀️', normal: '⛅' })[r.weather] || '⛅'} {r.weather}
                         </td>
                         <td style={{ fontSize: '0.82em', color: '#718096' }}>
                           {r.temperature ? `${r.temperature}°C` : '-'}
@@ -290,6 +345,7 @@ const Rekap = () => {
             )}
           </div>
         )}
+
       </div>
     </div>
   );
