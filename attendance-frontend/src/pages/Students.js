@@ -263,7 +263,6 @@ const fetchAll = async () => {
                 </thead>
                 <tbody>
                   {filtered.map(s => {
-                    const status = getStatus(s.uid);
                     return (
                       <tr key={s.id} style={{
                         background: !s.hadir && !s.sudah_pulang ? '#fff9f0' : 'inherit'
