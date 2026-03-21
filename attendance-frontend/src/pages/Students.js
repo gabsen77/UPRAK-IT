@@ -268,25 +268,32 @@ const Students = () => {
                       <tr key={s.id} style={{
                         background: !status ? '#fff9f0' : 'inherit'
                       }}>
-                        <td>
-                          {status ? (
-                            <div>
-                              <span className={`badge ${
-                                status.attendance_status === 'tepat_waktu' ? 'badge-green' :
-                                status.attendance_status === 'telat'       ? 'badge-yellow' :
-                                'badge-blue'
-                              }`}>
-                                {status.attendance_status === 'tepat_waktu' ? 'Tepat Waktu' :
-                                 status.attendance_status === 'telat'       ? 'Telat' : 'Pulang'}
-                              </span>
-                              <div style={{ fontSize: '0.75em', color: '#a0aec0', marginTop: 2 }}>
-                                {status.scan_time}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="badge badge-red">Belum Absen</span>
-                          )}
-                        </td>
+                        // Di bagian render status di tabel, ganti dengan ini:
+                <td>
+                  {status ? (
+                    <div>
+                      <span className={`badge ${
+                        status.attendance_status === 'tepat_waktu' ? 'badge-green' :
+                        status.attendance_status === 'telat'       ? 'badge-yellow' :
+                        'badge-blue'
+                      }`}>
+                        {status.attendance_status === 'tepat_waktu' ? 'Tepat Waktu' :
+                        status.attendance_status === 'telat'       ? 'Telat' : 'Masuk'}
+                      </span>
+                      {/* Tampilkan badge pulang jika sudah pulang */}
+                      {s.sudah_pulang && (
+                        <span className="badge badge-blue" style={{ marginLeft: 4 }}>
+                          Pulang {s.pulang_time}
+                        </span>
+                      )}
+                      <div style={{ fontSize: '0.75em', color: '#a0aec0', marginTop: 2 }}>
+                        {status.scan_time}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="badge badge-red">Belum Absen</span>
+                  )}
+                </td>
                         <td style={{ fontWeight: 600 }}>{s.name}</td>
                         <td>{s.class}</td>
                         <td><span className="uid-tag">{s.uid}</span></td>
