@@ -99,7 +99,7 @@ const Settings = () => {
         <p>Kelola password, jadwal, dan export data</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+      <div className="settings-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
 
         {/* Ganti Password */}
         <div className="card">

@@ -1,34 +1,54 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axiosConfig';
-import { Bar } from 'react-chartjs-2';
+import { Pie, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement,
-  Title, Tooltip, Legend,
+  ArcElement, Title, Tooltip, Legend,
 } from 'chart.js';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
 
 const Analytics = () => {
   const [weatherData, setWeatherData] = useState(null);
   const [dailyData,   setDailyData]   = useState(null);
+  const [todayPie,    setTodayPie]    = useState(null);
   const [loading,     setLoading]     = useState(true);
 
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [w, d] = await Promise.all([
+        const [w, d, att] = await Promise.all([
           api.get('/analytics/weather'),
           api.get('/analytics/daily'),
+          api.get('/attendance'),
         ]);
 
-        // Weather chart
-        const labels   = [...new Set(w.data.map(r => r.weather))];
-        const telat     = labels.map(l => {
+        // ---- Pie chart: status kehadiran hari ini ----
+        const today = att.data.filter(r =>
+          new Date(r.scanned_at).toDateString() === new Date().toDateString()
+        );
+        const tepat  = today.filter(r => r.attendance_status === 'tepat_waktu').length;
+        const telat  = today.filter(r => r.attendance_status === 'telat').length;
+        const pulang = today.filter(r => r.attendance_status === 'pulang').length;
+
+        setTodayPie({
+          labels: ['Tepat Waktu', 'Telat', 'Pulang'],
+          datasets: [{
+            data: [tepat, telat, pulang],
+            backgroundColor: ['#34d399', '#fbbf24', '#60a5fa'],
+            borderColor:     ['#10b981', '#f59e0b', '#3b82f6'],
+            borderWidth: 2,
+          }]
+        });
+
+        // ---- Pie chart: korelasi cuaca ----
+        const labels  = [...new Set(w.data.map(r => r.weather))];
+        const telatW  = labels.map(l => {
           const e = w.data.find(r => r.weather === l && r.attendance_status === 'telat');
           return e ? Number(e.total) : 0;
         });
-        const tepat = labels.map(l => {
+        const tepatW  = labels.map(l => {
           const e = w.data.find(r => r.weather === l && r.attendance_status === 'tepat_waktu');
           return e ? Number(e.total) : 0;
         });
@@ -36,19 +56,19 @@ const Analytics = () => {
         setWeatherData({
           labels,
           datasets: [
-            { label: 'Telat',        data: telat, backgroundColor: '#fbbf24' },
-            { label: 'Tepat Waktu',  data: tepat, backgroundColor: '#34d399' },
+            { label: 'Telat',       data: telatW, backgroundColor: '#fbbf24' },
+            { label: 'Tepat Waktu', data: tepatW, backgroundColor: '#34d399' },
           ],
         });
 
-        // Daily chart
+        // ---- Bar chart: 7 hari terakhir ----
         const days = d.data.slice(0, 7).reverse();
         setDailyData({
           labels: days.map(r => r.date),
           datasets: [
             { label: 'Tepat Waktu', data: days.map(r => Number(r.tepat_waktu) || 0), backgroundColor: '#34d399' },
-            { label: 'Telat',       data: days.map(r => Number(r.telat) || 0),       backgroundColor: '#fbbf24' },
-            { label: 'Pulang',      data: days.map(r => Number(r.pulang) || 0),      backgroundColor: '#60a5fa' },
+            { label: 'Telat',       data: days.map(r => Number(r.telat)       || 0), backgroundColor: '#fbbf24' },
+            { label: 'Pulang',      data: days.map(r => Number(r.pulang)      || 0), backgroundColor: '#60a5fa' },
           ],
         });
 
@@ -61,7 +81,19 @@ const Analytics = () => {
     fetchAll();
   }, []);
 
-  const chartOptions = {
+  const pieOptions = {
+    responsive: true,
+    plugins: {
+      legend: { position: 'bottom' },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => ` ${ctx.label}: ${ctx.raw} siswa`
+        }
+      }
+    }
+  };
+
+  const barOptions = {
     responsive: true,
     plugins: { legend: { position: 'bottom' } },
     scales: { x: { grid: { display: false } } },
@@ -76,16 +108,21 @@ const Analytics = () => {
         <p>Analisis data kehadiran dan korelasi cuaca</p>
       </div>
 
+      {/* Row 1: 2 Pie chart */}
       <div className="chart-grid">
         <div className="card">
           <div className="card-header">
-            <h3>Kehadiran 7 Hari Terakhir</h3>
+            <h3>Status Kehadiran Hari Ini</h3>
           </div>
-          <div className="card-body">
-            {dailyData
-              ? <Bar data={dailyData} options={chartOptions} />
-              : <div className="empty-state"><p>Belum ada data harian</p></div>
-            }
+          <div className="card-body" style={{ maxWidth: 320, margin: '0 auto' }}>
+            {todayPie && (todayPie.datasets[0].data.some(v => v > 0)) ? (
+              <Pie data={todayPie} options={pieOptions} />
+            ) : (
+              <div className="empty-state">
+                <div style={{ fontSize: '2em' }}>📊</div>
+                <p>Belum ada data hari ini</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -94,11 +131,32 @@ const Analytics = () => {
             <h3>Korelasi Cuaca vs Keterlambatan</h3>
           </div>
           <div className="card-body">
-            {weatherData
-              ? <Bar data={weatherData} options={chartOptions} />
-              : <div className="empty-state"><p>Belum ada data cuaca</p></div>
-            }
+            {weatherData ? (
+              <Bar data={weatherData} options={barOptions} />
+            ) : (
+              <div className="empty-state">
+                <div style={{ fontSize: '2em' }}>🌤️</div>
+                <p>Belum ada data cuaca</p>
+              </div>
+            )}
           </div>
+        </div>
+      </div>
+
+      {/* Row 2: Bar chart 7 hari */}
+      <div className="card">
+        <div className="card-header">
+          <h3>Kehadiran 7 Hari Terakhir</h3>
+        </div>
+        <div className="card-body">
+          {dailyData ? (
+            <Bar data={dailyData} options={barOptions} />
+          ) : (
+            <div className="empty-state">
+              <div style={{ fontSize: '2em' }}>📅</div>
+              <p>Belum ada data harian</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

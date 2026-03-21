@@ -260,6 +260,9 @@ const Dashboard = () => {
                   <th>Status</th>
                   <th>Cuaca</th>
                   <th>Suhu</th>
+                  <th className="hide-mobile">UID Kartu</th>
+                  <th className="hide-mobile">Cuaca</th>
+                  <th className="hide-mobile">Suhu</th>
                 </tr>
               </thead>
               <tbody>
@@ -278,6 +281,9 @@ const Dashboard = () => {
                     <td>{r.temperature ? `${r.temperature}°C` : '-'}</td>
                   </tr>
                 ))}
+                <td className="hide-mobile"><span className="uid-tag">{r.uid}</span></td>
+                <td className="hide-mobile">{weatherIcon(r.weather)}</td>
+                <td className="hide-mobile">{r.temperature ? `${r.temperature}°C` : '-'}</td>
               </tbody>
             </table>
           )}
