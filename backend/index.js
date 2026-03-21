@@ -51,6 +51,25 @@ const sendWA = async (phone, message) => {
   }
 };
 
+// time
+const getTodayJakarta = () => {
+  const now = new Date();
+  const jakartaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+  const d = jakartaTime.getDate().toString().padStart(2, '0');
+  const m = (jakartaTime.getMonth() + 1).toString().padStart(2, '0');
+  const y = jakartaTime.getFullYear();
+  return `${d}/${m}/${y}`;
+};
+
+const getTodayISO = () => {
+  const now = new Date();
+  const jakartaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+  const d = jakartaTime.getDate().toString().padStart(2, '0');
+  const m = (jakartaTime.getMonth() + 1).toString().padStart(2, '0');
+  const y = jakartaTime.getFullYear();
+  return `${y}-${m}-${d}`;
+};
+
 // -------- CRON: RESET LOG HARIAN --------
 cron.schedule('0 0 * * *', async () => {
   console.log('New day started - attendance auto resets via DATE filter');
@@ -220,26 +239,20 @@ app.post('/api/schedule/today', authenticateToken, adminOnly, async (req, res) =
 
 app.get('/api/students/today', authenticateToken, async (req, res) => {
   try {
-    const students = await pool.query('SELECT * FROM students ORDER BY name ASC');
-
-    const attendance = await pool.query(`
-      SELECT * FROM attendance
-      WHERE scanned_at >= CURRENT_DATE AT TIME ZONE 'Asia/Jakarta'
-      AND scanned_at < (CURRENT_DATE + 1) AT TIME ZONE 'Asia/Jakarta'
-      AND status = 'present'
-      ORDER BY scanned_at ASC
-    `);
+    const todayStr = getTodayJakarta();
+    const students  = await pool.query('SELECT * FROM students ORDER BY name ASC');
+    const attendance = await pool.query(
+      `SELECT * FROM attendance WHERE date = $1 AND status = 'present' ORDER BY scanned_at ASC`,
+      [todayStr]
+    );
 
     const result = students.rows.map(s => {
       const masuk = attendance.rows.find(a =>
-        a.uid === s.uid &&
-        ['tepat_waktu', 'telat'].includes(a.attendance_status)
+        a.uid === s.uid && ['tepat_waktu', 'telat'].includes(a.attendance_status)
       );
       const pulang = attendance.rows.find(a =>
-        a.uid === s.uid &&
-        a.attendance_status === 'pulang'
+        a.uid === s.uid && a.attendance_status === 'pulang'
       );
-
       return {
         ...s,
         attendance_status: masuk?.attendance_status || null,
@@ -311,7 +324,7 @@ app.delete('/api/students/:id', authenticateToken, adminOnly, async (req, res) =
 
 app.post('/api/attendance', async (req, res) => {
   const { uid, temperature, humidity, time, date, status, weather } = req.body;
-  console.log(`UID: ${uid} | Status: ${status} | Jam: ${time}`);
+  console.log(`UID: ${uid} | Status: ${status} | Jam: ${time} | Date: ${date}`);
 
   try {
     const studentResult = await pool.query('SELECT * FROM students WHERE uid = $1', [uid]);
@@ -319,7 +332,7 @@ app.post('/api/attendance', async (req, res) => {
     if (studentResult.rows.length === 0) {
       await pool.query(
         `INSERT INTO attendance (uid, name, class, status, attendance_status, weather, temperature, humidity, time, date, scanned_at)
-         VALUES ($1,'Unknown','Unknown','unknown','unknown',$2,$3,$4,$5,$6,NOW() AT TIME ZONE 'Asia/Jakarta')`,
+         VALUES ($1,'Unknown','Unknown','unknown','unknown',$2,$3,$4,$5,$6,NOW())`,
         [uid, weather, temperature, humidity, time, date]
       );
       return res.json({ status: 'unknown' });
@@ -330,18 +343,17 @@ app.post('/api/attendance', async (req, res) => {
     // ---- KONDISI PULANG ----
     if (status === 'pulang') {
       const alreadyPulang = await pool.query(
-        `SELECT * FROM attendance WHERE uid=$1 AND DATE(scanned_at)=CURRENT_DATE AND attendance_status='pulang'`,
-        [uid]
+        `SELECT * FROM attendance WHERE uid=$1 AND date=$2 AND attendance_status='pulang'`,
+        [uid, date]
       );
       if (alreadyPulang.rows.length > 0) {
         return res.json({ status: 'already', name: student.name, class: student.class });
       }
 
-      // Cek sudah scan masuk dulu
       const sudahMasuk = await pool.query(
-        `SELECT * FROM attendance WHERE uid=$1 AND DATE(scanned_at)=CURRENT_DATE
+        `SELECT * FROM attendance WHERE uid=$1 AND date=$2
          AND status='present' AND attendance_status IN ('tepat_waktu','telat')`,
-        [uid]
+        [uid, date]
       );
       if (sudahMasuk.rows.length === 0) {
         return res.json({ status: 'belum_masuk', name: student.name, class: student.class });
@@ -349,22 +361,19 @@ app.post('/api/attendance', async (req, res) => {
 
       await pool.query(
         `INSERT INTO attendance (uid, name, class, status, attendance_status, weather, temperature, humidity, time, date, scanned_at)
-         VALUES ($1,$2,$3,'present','pulang',$4,$5,$6,$7,$8,NOW() AT TIME ZONE 'Asia/Jakarta')`,
+         VALUES ($1,$2,$3,'present','pulang',$4,$5,$6,$7,$8,NOW())`,
         [uid, student.name, student.class, weather, temperature, humidity, time, date]
       );
 
-      if (student.phone) {
-        sendWA(student.phone, `Halo ${student.name}, kamu sudah PULANG pada ${time}. Sampai jumpa besok! 👋`);
-      }
-
+      if (student.phone) sendWA(student.phone, `Halo ${student.name}, kamu sudah PULANG pada ${time}. Sampai jumpa besok! 👋`);
       return res.json({ status: 'found', name: student.name, class: student.class, attendance_status: 'pulang' });
     }
 
     // ---- KONDISI MASUK / TELAT ----
     const alreadyMasuk = await pool.query(
-      `SELECT * FROM attendance WHERE uid=$1 AND DATE(scanned_at)=CURRENT_DATE
+      `SELECT * FROM attendance WHERE uid=$1 AND date=$2
        AND status='present' AND attendance_status IN ('tepat_waktu','telat')`,
-      [uid]
+      [uid, date]
     );
     if (alreadyMasuk.rows.length > 0) {
       return res.json({ status: 'already', name: student.name, class: student.class });
@@ -372,7 +381,7 @@ app.post('/api/attendance', async (req, res) => {
 
     await pool.query(
       `INSERT INTO attendance (uid, name, class, status, attendance_status, weather, temperature, humidity, time, date, scanned_at)
-       VALUES ($1,$2,$3,'present',$4,$5,$6,$7,$8,$9,NOW() AT TIME ZONE 'Asia/Jakarta')`,
+       VALUES ($1,$2,$3,'present',$4,$5,$6,$7,$8,$9,NOW())`,
       [uid, student.name, student.class, status, weather, temperature, humidity, time, date]
     );
 
@@ -433,8 +442,14 @@ app.post('/api/attendance/manual', authenticateToken, adminOnly, async (req, res
     if (studentResult.rows.length === 0) return res.status(404).json({ error: 'Siswa tidak ditemukan' });
 
     const student    = studentResult.rows[0];
-    const targetDate = date || new Date().toLocaleDateString('id-ID', { day:'2-digit', month:'2-digit', year:'numeric' }).split('/').join('/');
-    const targetTime = time || new Date().toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    const targetDate = date || getTodayJakarta();
+
+    // Format jam WIB
+    const nowJakarta = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+    const hh = nowJakarta.getHours().toString().padStart(2, '0');
+    const mm = nowJakarta.getMinutes().toString().padStart(2, '0');
+    const ss = nowJakarta.getSeconds().toString().padStart(2, '0');
+    const targetTime = time || `${hh}.${mm}.${ss}`;
 
     if (attendance_status !== 'pulang') {
       const alreadyExists = await pool.query(
@@ -447,8 +462,8 @@ app.post('/api/attendance/manual', authenticateToken, adminOnly, async (req, res
     }
 
     const result = await pool.query(
-      `INSERT INTO attendance (..., scanned_at, note)
-      VALUES ($1,$2,$3,'present',$4,'manual',0,0,$5,$6,NOW() AT TIME ZONE 'Asia/Jakarta',$7) RETURNING *`,
+      `INSERT INTO attendance (uid, name, class, status, attendance_status, weather, temperature, humidity, time, date, scanned_at, note)
+       VALUES ($1,$2,$3,'present',$4,'manual',0,0,$5,$6,NOW(),$7) RETURNING *`,
       [student.uid, student.name, student.class, attendance_status, targetTime, targetDate, note || 'Input manual oleh admin']
     );
 

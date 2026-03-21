@@ -1,6 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axiosConfig';
 
+const getTodayStr = () => {
+  const now = new Date();
+  const d = now.getDate().toString().padStart(2, '0');
+  const m = (now.getMonth() + 1).toString().padStart(2, '0');
+  const y = now.getFullYear();
+  return `${d}/${m}/${y}`;
+};
+
+const getTodayTime = () => {
+  const now = new Date();
+  const hh = now.getHours().toString().padStart(2, '0');
+  const mm = now.getMinutes().toString().padStart(2, '0');
+  const ss = now.getSeconds().toString().padStart(2, '0');
+  return `${hh}.${mm}.${ss}`;
+};
+
 const statusOptions = [
   { value: 'tepat_waktu', label: 'Tepat Waktu', cls: 'badge-green' },
   { value: 'telat',       label: 'Telat',        cls: 'badge-yellow' },
@@ -19,23 +35,14 @@ const statusBadge = (status) => {
 };
 
 const ManualAttendance = () => {
-  const now = new Date();
-  const todayDate = now.toLocaleDateString('id-ID', {
-    day: '2-digit', month: '2-digit', year: 'numeric'
-  }).split('/').join('/');
-
-  const todayTime = now.toLocaleTimeString('id-ID', {
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  });
-
   const [students,        setStudents]        = useState([]);
   const [todayAttendance, setTodayAttendance] = useState([]);
   const [searchName,      setSearchName]      = useState('');
   const [searchClass,     setSearchClass]     = useState('');
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [attStatus,       setAttStatus]       = useState('tepat_waktu');
-  const [attDate,         setAttDate]         = useState(todayDate);
-  const [attTime,         setAttTime]         = useState(todayTime);
+  const [attDate,         setAttDate]         = useState(getTodayStr());
+  const [attTime,         setAttTime]         = useState(getTodayTime());
   const [note,            setNote]            = useState('');
   const [message,         setMessage]         = useState('');
   const [msgType,         setMsgType]         = useState('');
@@ -51,10 +58,10 @@ const ManualAttendance = () => {
       api.get('/attendance'),
     ]);
     setStudents(s.data);
-    // Filter hari ini saja
-    const today = a.data.filter(r =>
-      new Date(r.scanned_at).toDateString() === new Date().toDateString()
-    );
+
+    // Filter pakai kolom date bukan scanned_at
+    const todayStr = getTodayStr();
+    const today = a.data.filter(r => r.date === todayStr);
     setTodayAttendance(today);
   };
 
@@ -90,6 +97,7 @@ const ManualAttendance = () => {
       setMsgType('success');
       setSelectedStudent(null);
       setNote('');
+      setAttTime(getTodayTime());
       fetchAll();
     } catch (err) {
       setMessage(err.response?.data?.error || 'Gagal input absensi');
@@ -130,8 +138,6 @@ const ManualAttendance = () => {
     boxSizing: 'border-box',
   };
 
-  const selectStyle = { ...inputStyle };
-
   return (
     <div>
       <div className="page-header">
@@ -148,7 +154,7 @@ const ManualAttendance = () => {
             <div className="card-body">
               <form onSubmit={handleSubmit}>
 
-                {/* Pilih siswa */}
+                {/* Cari siswa */}
                 <div className="form-group">
                   <label>Cari Siswa</label>
                   <input type="text" placeholder="Ketik nama siswa..."
@@ -160,7 +166,8 @@ const ManualAttendance = () => {
 
                 <div className="form-group">
                   <label>Filter Kelas</label>
-                  <select value={searchClass} onChange={e => setSearchClass(e.target.value)} style={selectStyle}>
+                  <select value={searchClass} onChange={e => setSearchClass(e.target.value)}
+                    style={inputStyle}>
                     <option value="">Semua Kelas</option>
                     {kelasList.map(k => <option key={k} value={k}>{k}</option>)}
                   </select>
@@ -177,19 +184,16 @@ const ManualAttendance = () => {
                         Tidak ditemukan
                       </div>
                     ) : filteredStudents.map(s => {
-                      const existing = getStudentStatus(s.uid);
+                      const existing   = getStudentStatus(s.uid);
                       const isSelected = selectedStudent?.id === s.id;
                       return (
                         <div key={s.id}
                           onClick={() => setSelectedStudent(s)}
                           style={{
-                            padding: '10px 12px',
-                            cursor: 'pointer',
+                            padding: '10px 12px', cursor: 'pointer',
                             background: isSelected ? '#eff6ff' : 'inherit',
                             borderBottom: '1px solid #f1f5f9',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                           }}
                         >
                           <div>
@@ -197,10 +201,8 @@ const ManualAttendance = () => {
                             <div style={{ fontSize: '0.78em', color: '#718096' }}>{s.class}</div>
                           </div>
                           {existing
-                            ? <span className={`badge ${existing.attendance_status === 'tepat_waktu' ? 'badge-green' : 'badge-yellow'}`} style={{ fontSize: '0.72em' }}>
-                                Sudah absen
-                              </span>
-                            : <span className="badge badge-red" style={{ fontSize: '0.72em' }}>Belum</span>
+                            ? <span className="badge badge-green" style={{ fontSize: '0.72em' }}>Sudah absen</span>
+                            : <span className="badge badge-red"   style={{ fontSize: '0.72em' }}>Belum</span>
                           }
                         </div>
                       );
@@ -269,7 +271,7 @@ const ManualAttendance = () => {
                   <label>Jam</label>
                   <input type="text" value={attTime}
                     onChange={e => setAttTime(e.target.value)}
-                    placeholder="HH:MM:SS"
+                    placeholder="HH.MM.SS"
                     style={inputStyle}
                   />
                 </div>
@@ -284,7 +286,8 @@ const ManualAttendance = () => {
                   />
                 </div>
 
-                <button type="submit" className="btn-primary" disabled={loading || !selectedStudent}>
+                <button type="submit" className="btn-primary"
+                  disabled={loading || !selectedStudent}>
                   {loading ? 'Menyimpan...' : '+ Input Absensi Manual'}
                 </button>
 
@@ -300,7 +303,7 @@ const ManualAttendance = () => {
           </div>
         </div>
 
-        {/* Tabel absensi hari ini + edit */}
+        {/* Tabel absensi hari ini */}
         <div className="card">
           <div className="card-header">
             <h3>Absensi Hari Ini</h3>
@@ -356,10 +359,10 @@ const ManualAttendance = () => {
                           <div>
                             {statusBadge(r.attendance_status)}
                             {r.weather === 'manual' && (
-                              <span style={{ marginLeft: 4, fontSize: '0.7em', color: '#92400e',
-                                background: '#fef3c7', padding: '1px 5px', borderRadius: 4 }}>
-                                manual
-                              </span>
+                              <span style={{
+                                marginLeft: 4, fontSize: '0.7em', color: '#92400e',
+                                background: '#fef3c7', padding: '1px 5px', borderRadius: 4
+                              }}>manual</span>
                             )}
                           </div>
                         )}
@@ -371,7 +374,9 @@ const ManualAttendance = () => {
                             style={{ width: '100%', padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: '0.85em' }}
                           />
                         ) : (
-                          <span title={r.note}>{r.note ? r.note.slice(0, 30) + (r.note.length > 30 ? '...' : '') : '-'}</span>
+                          <span title={r.note}>
+                            {r.note ? r.note.slice(0, 30) + (r.note.length > 30 ? '...' : '') : '-'}
+                          </span>
                         )}
                       </td>
                       <td>
