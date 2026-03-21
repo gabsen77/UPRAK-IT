@@ -472,49 +472,67 @@ app.post('/api/schedule/today', authenticateToken, adminOnly, async (req, res) =
 app.get('/api/export/excel', authenticateToken, async (req, res) => {
   const { startDate, endDate } = req.query;
   try {
-    let query = `SELECT name, class, uid, attendance_status, weather, temperature, humidity, time, date, scanned_at
-                 FROM attendance WHERE status = 'present'`;
-    const params = [];
+    let query;
+    let params = [];
 
     if (startDate && endDate) {
-      query += ` AND date >= $1 AND date <= $2`;
-      params.push(startDate, endDate);
+      // Gunakan scanned_at (timestamp) untuk filter range yang akurat
+      // startDate dan endDate format YYYY-MM-DD dari frontend
+      query = `SELECT name, class, uid, attendance_status, weather, temperature, humidity, time, date, scanned_at
+               FROM attendance 
+               WHERE status = 'present'
+               AND scanned_at >= $1::date
+               AND scanned_at < ($2::date + interval '1 day')
+               ORDER BY scanned_at DESC`;
+      params = [startDate, endDate];
+    } else {
+      query = `SELECT name, class, uid, attendance_status, weather, temperature, humidity, time, date, scanned_at
+               FROM attendance 
+               WHERE status = 'present'
+               ORDER BY scanned_at DESC`;
     }
-    query += ' ORDER BY scanned_at DESC';
 
     const result = await pool.query(query, params);
 
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Tidak ada data untuk rentang tanggal ini' });
+    }
+
     const data = result.rows.map(r => ({
-      'Nama':        r.name,
-      'Kelas':       r.class,
-      'UID Kartu':   r.uid,
-      'Status':      r.attendance_status === 'tepat_waktu' ? 'Tepat Waktu' :
-                     r.attendance_status === 'telat' ? 'Telat' :
-                     r.attendance_status === 'pulang' ? 'Pulang' : r.attendance_status,
-      'Cuaca':       r.weather,
-      'Suhu (°C)':   r.temperature,
-      'Kelembaban %': r.humidity,
-      'Jam':         r.time,
-      'Tanggal':     r.date,
+      'Nama':          r.name,
+      'Kelas':         r.class,
+      'UID Kartu':     r.uid,
+      'Status':        r.attendance_status === 'tepat_waktu' ? 'Tepat Waktu' :
+                       r.attendance_status === 'telat'       ? 'Telat' :
+                       r.attendance_status === 'pulang'      ? 'Pulang' : r.attendance_status,
+      'Cuaca':         r.weather,
+      'Suhu (°C)':     r.temperature,
+      'Kelembaban %':  r.humidity,
+      'Jam':           r.time,
+      'Tanggal':       r.date,
     }));
 
     const ws = xlsx.utils.json_to_sheet(data);
     const wb = xlsx.utils.book_new();
     xlsx.utils.book_append_sheet(wb, ws, 'Absensi');
 
-    // Auto column width
-    const colWidths = Object.keys(data[0] || {}).map(key => ({
+    const colWidths = Object.keys(data[0]).map(key => ({
       wch: Math.max(key.length, ...data.map(r => String(r[key] || '').length)) + 2
     }));
     ws['!cols'] = colWidths;
 
     const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
-    res.setHeader('Content-Disposition', 'attachment; filename=laporan-absensi.xlsx');
+    const filename = startDate && endDate
+      ? `laporan-${startDate}-sd-${endDate}.xlsx`
+      : 'laporan-semua.xlsx';
+
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buffer);
 
   } catch (err) {
+    console.error('Export error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
