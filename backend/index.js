@@ -7,6 +7,8 @@ const app     = express();
 const cron = require('node-cron');
 const xlsx = require('xlsx');
 const axiosLib = require('axios');
+const PDFDocument = require('pdfkit');
+
 
 app.use(express.json());
 app.use(cors({
@@ -821,6 +823,139 @@ app.put('/api/attendance/:id', authenticateToken, adminOnly, async (req, res) =>
 
     res.json({ success: true, data: result.rows[0] });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/export/pdf', authenticateToken, async (req, res) => {
+  const { startDate, endDate } = req.query;
+  try {
+    let query;
+    let params = [];
+
+    if (startDate && endDate) {
+      query = `SELECT name, class, uid, attendance_status, weather, temperature, humidity, time, date, scanned_at
+               FROM attendance WHERE status = 'present'
+               AND scanned_at >= $1::date
+               AND scanned_at < ($2::date + interval '1 day')
+               ORDER BY scanned_at DESC`;
+      params = [startDate, endDate];
+    } else {
+      query = `SELECT name, class, uid, attendance_status, weather, temperature, humidity, time, date, scanned_at
+               FROM attendance WHERE status = 'present'
+               ORDER BY scanned_at DESC`;
+    }
+
+    const result = await pool.query(query, params);
+
+    const doc = new PDFDocument({ margin: 40, size: 'A4' });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition',
+      `attachment; filename=laporan-absensi${startDate ? `-${startDate}-sd-${endDate}` : ''}.pdf`
+    );
+    doc.pipe(res);
+
+    // ---- Header ----
+    doc.fontSize(18).font('Helvetica-Bold').text('NASI - Laporan Absensi', { align: 'center' });
+    doc.fontSize(11).font('Helvetica').fillColor('#718096');
+
+    if (startDate && endDate) {
+      doc.text(`Periode: ${startDate} s/d ${endDate}`, { align: 'center' });
+    } else {
+      doc.text('Semua Data', { align: 'center' });
+    }
+
+    doc.text(`Dicetak: ${new Date().toLocaleString('id-ID')}`, { align: 'center' });
+    doc.moveDown(0.5);
+
+    // ---- Garis header ----
+    doc.moveTo(40, doc.y).lineTo(555, doc.y).strokeColor('#e2e8f0').lineWidth(1).stroke();
+    doc.moveDown(0.5);
+
+    // ---- Statistik ringkas ----
+    const total       = result.rows.length;
+    const tepatWaktu  = result.rows.filter(r => r.attendance_status === 'tepat_waktu').length;
+    const telat       = result.rows.filter(r => r.attendance_status === 'telat').length;
+    const pulang      = result.rows.filter(r => r.attendance_status === 'pulang').length;
+
+    doc.fontSize(10).font('Helvetica-Bold').fillColor('#2d3748');
+    doc.text(`Total Records: ${total}   |   Tepat Waktu: ${tepatWaktu}   |   Telat: ${telat}   |   Pulang: ${pulang}`, { align: 'center' });
+    doc.moveDown(0.8);
+
+    // ---- Tabel header ----
+    const colX     = [40, 140, 200, 280, 360, 420, 475];
+    const colLabel = ['Nama', 'Kelas', 'Tanggal', 'Jam', 'Status', 'Cuaca', 'Suhu'];
+    const rowH     = 20;
+
+    // Header row background
+    doc.rect(40, doc.y, 515, rowH).fillColor('#1a56db').fill();
+
+    const headerY = doc.y + 5;
+    doc.font('Helvetica-Bold').fontSize(9).fillColor('white');
+    colLabel.forEach((label, i) => {
+      doc.text(label, colX[i], headerY, { width: (colX[i + 1] || 555) - colX[i] - 4 });
+    });
+    doc.moveDown(0.1);
+    doc.y += rowH - 14;
+
+    // ---- Tabel data ----
+    doc.font('Helvetica').fontSize(8.5).fillColor('#2d3748');
+
+    result.rows.forEach((r, idx) => {
+      const rowY = doc.y;
+
+      // Alternating row color
+      if (idx % 2 === 0) {
+        doc.rect(40, rowY, 515, rowH).fillColor('#f8fafc').fill();
+      }
+
+      const statusLabel =
+        r.attendance_status === 'tepat_waktu' ? 'Tepat Waktu' :
+        r.attendance_status === 'telat'        ? 'Telat' :
+        r.attendance_status === 'pulang'       ? 'Pulang' : r.attendance_status;
+
+      const rowData = [
+        r.name,
+        r.class,
+        r.date || new Date(r.scanned_at).toLocaleDateString('id-ID'),
+        r.time || '--:--',
+        statusLabel,
+        r.weather || '-',
+        r.temperature ? `${r.temperature}°C` : '-',
+      ];
+
+      doc.fillColor('#2d3748');
+      rowData.forEach((val, i) => {
+        doc.text(String(val || '-'), colX[i] + 2, rowY + 6,
+          { width: (colX[i + 1] || 555) - colX[i] - 4, lineBreak: false }
+        );
+      });
+
+      // Border bawah row
+      doc.moveTo(40, rowY + rowH).lineTo(555, rowY + rowH)
+        .strokeColor('#e2e8f0').lineWidth(0.5).stroke();
+
+      doc.y = rowY + rowH;
+
+      // New page jika hampir penuh
+      if (doc.y > 750) {
+        doc.addPage();
+        doc.y = 40;
+      }
+    });
+
+    // ---- Footer ----
+    doc.moveDown(1);
+    doc.moveTo(40, doc.y).lineTo(555, doc.y).strokeColor('#e2e8f0').lineWidth(1).stroke();
+    doc.moveDown(0.3);
+    doc.fontSize(8).fillColor('#a0aec0').font('Helvetica')
+      .text('Dokumen ini digenerate otomatis oleh sistem NASI Attendance', { align: 'center' });
+
+    doc.end();
+
+  } catch (err) {
+    console.error('PDF export error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
