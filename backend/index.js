@@ -188,7 +188,7 @@ app.post('/api/attendance', async (req, res) => {
     if (studentResult.rows.length === 0) {
       await pool.query(
         `INSERT INTO attendance (uid, name, class, status, attendance_status, weather, temperature, humidity, time, date, scanned_at)
-         VALUES ($1, 'Unknown', 'Unknown', 'unknown', 'unknown', $2, $3, $4, $5, $6, NOW())`,
+         VALUES ($1,'Unknown','Unknown','unknown','unknown',$2,$3,$4,$5,$6,NOW())`,
         [uid, weather, temperature, humidity, time, date]
       );
       return res.json({ status: 'unknown' });
@@ -196,11 +196,64 @@ app.post('/api/attendance', async (req, res) => {
 
     const student = studentResult.rows[0];
 
+    // ---- Kondisi PULANG ----
+    if (status === 'pulang') {
+      // Cek sudah scan pulang hari ini belum
+      const alreadyPulang = await pool.query(
+        `SELECT * FROM attendance
+         WHERE uid = $1
+         AND DATE(scanned_at) = CURRENT_DATE
+         AND attendance_status = 'pulang'`,
+        [uid]
+      );
+
+      if (alreadyPulang.rows.length > 0) {
+        return res.json({
+          status: 'already',
+          name:   student.name,
+          class:  student.class
+        });
+      }
+
+      // Cek apakah sudah absen masuk hari ini
+      const sudahMasuk = await pool.query(
+        `SELECT * FROM attendance
+         WHERE uid = $1
+         AND DATE(scanned_at) = CURRENT_DATE
+         AND status = 'present'
+         AND attendance_status != 'pulang'`,
+        [uid]
+      );
+
+      await pool.query(
+        `INSERT INTO attendance (uid, name, class, status, attendance_status, weather, temperature, humidity, time, date, scanned_at)
+         VALUES ($1,$2,$3,'present','pulang',$4,$5,$6,$7,$8,NOW())`,
+        [uid, student.name, student.class, weather, temperature, humidity, time, date]
+      );
+
+      // Kirim WA pulang
+      if (student.phone) {
+        const msg = sudahMasuk.rows.length > 0
+          ? `Halo ${student.name}, kamu sudah PULANG pada ${time}. Sampai jumpa besok! 👋`
+          : `Halo ${student.name}, kamu scan pulang pada ${time} tapi tidak ada data masuk hari ini.`;
+        sendWA(student.phone, msg);
+      }
+
+      return res.json({
+        status:            'found',
+        name:              student.name,
+        class:             student.class,
+        attendance_status: 'pulang'
+      });
+    }
+
+    // ---- Kondisi MASUK / TELAT ----
     const alreadyScanned = await pool.query(
-      `SELECT * FROM attendance 
-       WHERE uid = $1 
+      `SELECT * FROM attendance
+       WHERE uid = $1
        AND DATE(scanned_at) = CURRENT_DATE
-       AND status = 'present'`,
+       AND status = 'present'
+       AND attendance_status != 'pulang'`,
       [uid]
     );
 
@@ -214,20 +267,16 @@ app.post('/api/attendance', async (req, res) => {
 
     await pool.query(
       `INSERT INTO attendance (uid, name, class, status, attendance_status, weather, temperature, humidity, time, date, scanned_at)
-       VALUES ($1, $2, $3, 'present', $4, $5, $6, $7, $8, $9, NOW())`,
+       VALUES ($1,$2,$3,'present',$4,$5,$6,$7,$8,$9,NOW())`,
       [uid, student.name, student.class, status, weather, temperature, humidity, time, date]
     );
 
-    // -------- KIRIM WA OTOMATIS SETELAH ABSEN --------
+    // Kirim WA masuk/telat
     if (student.phone) {
-      const statusLabel = status === 'tepat_waktu' ? 'Tepat Waktu' :
-                          status === 'telat'        ? 'TELAT'       :
-                          status === 'pulang'       ? 'Pulang'      : status;
-
+      const statusLabel = status === 'tepat_waktu' ? 'Tepat Waktu' : 'TELAT';
       const waMessage = status === 'telat'
-        ? `Halo ${student.name}, absensi kamu TERCATAT TELAT pada ${time} hari ini (${date}).\n\nHarap segera melapor ke guru piket. 🙏`
-        : `Halo ${student.name}, absensi kamu BERHASIL DICATAT!\n\n📋 Detail:\n- Nama: ${student.name}\n- Kelas: ${student.class}\n- Jam: ${time}\n- Tanggal: ${date}\n- Status: ${statusLabel}\n\nTerima kasih! 😊`;
-
+        ? `Halo ${student.name}, absensi kamu TERCATAT TELAT pada ${time} (${date}).\n\nSegera melapor ke guru piket. 🙏`
+        : `Halo ${student.name}, absensi BERHASIL!\n\n- Jam: ${time}\n- Tanggal: ${date}\n- Status: ${statusLabel}\n\nTerima kasih! 😊`;
       sendWA(student.phone, waMessage);
     }
 
