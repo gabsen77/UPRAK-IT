@@ -51,14 +51,40 @@ const Settings = () => {
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
+  try {
+    const token = localStorage.getItem('token');
     let url = 'https://uprak-it-production.up.railway.app/api/export/excel';
     if (startDate && endDate) url += `?startDate=${startDate}&endDate=${endDate}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      alert('Gagal export: ' + err.error);
+      return;
+    }
+
+    // Convert response ke blob lalu download
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = 'laporan-absensi.xlsx';
+    a.href = downloadUrl;
+    a.download = `laporan-absensi${startDate ? `-${startDate}` : ''}.xlsx`;
+    document.body.appendChild(a);
     a.click();
-  };
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(downloadUrl);
+
+  } catch (err) {
+    alert('Gagal export: ' + err.message);
+  }
+};
 
   const inputStyle = {
     width: '80px', padding: '8px 10px',

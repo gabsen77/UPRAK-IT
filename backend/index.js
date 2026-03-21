@@ -553,6 +553,31 @@ const sendWA = async (phone, message) => {
   }
 };
 
+// Schedule publik untuk ESP32 (tidak perlu token)
+app.get('/api/schedule/today/public', async (req, res) => {
+  try {
+    const today = new Date().toLocaleDateString('id-ID', {
+      day:'2-digit', month:'2-digit', year:'numeric'
+    }).split('/').reverse().join('/');
+
+    const result = await pool.query(
+      'SELECT * FROM schedule_override WHERE date = $1', [today]
+    );
+
+    if (result.rows.length > 0) {
+      res.json(result.rows[0]);
+    } else {
+      res.json({
+        jam_masuk_h: 6,  jam_masuk_m: 30,
+        jam_telat_h: 6,  jam_telat_m: 30,
+        jam_pulang_h: 15, jam_pulang_m: 20
+      });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(3001, '0.0.0.0', () => {
   console.log('Server running on port 3001');
   console.log('Endpoints:');
