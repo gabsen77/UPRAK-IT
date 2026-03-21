@@ -7,6 +7,7 @@ import Login          from './pages/Login';
 import UserManagement from './pages/UserManagement';
 import Settings from './pages/Settings';
 import Rekap from './pages/Rekap';
+import ManualAttendance from './pages/ManualAttendance';
 import './App.css';
 
 function App() {
@@ -45,6 +46,7 @@ function App() {
             {isAdmin && <NavLink to="/students">Students</NavLink>}
             {isAdmin && <NavLink to="/users">Users</NavLink>}
             {isAdmin && <NavLink to="/settings">Settings</NavLink>}
+            {isAdmin && <NavLink to="/manual">Absensi Manual</NavLink>}
 
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -85,6 +87,9 @@ function App() {
               element={isAdmin ? <UserManagement /> : <Navigate to="/" />}
             />
             <Route path="/settings" element={isAdmin ? <Settings /> : <Navigate to="/" />} 
+            />
+            <Route path="/manual"
+              element={isAdmin ? <ManualAttendance /> : <Navigate to="/" />}
             />
 
             <Route path="*" element={<Navigate to="/" />} />

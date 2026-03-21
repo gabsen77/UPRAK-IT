@@ -729,6 +729,102 @@ app.get('/api/rekap/summary', authenticateToken, async (req, res) => {
   }
 });
 
+// -------- ABSENSI MANUAL --------
+app.post('/api/attendance/manual', authenticateToken, adminOnly, async (req, res) => {
+  const { student_id, attendance_status, date, time, note } = req.body;
+
+  try {
+    // Cari siswa
+    const studentResult = await pool.query(
+      'SELECT * FROM students WHERE id = $1', [student_id]
+    );
+
+    if (studentResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Siswa tidak ditemukan' });
+    }
+
+    const student = studentResult.rows[0];
+    const targetDate = date || new Date().toLocaleDateString('id-ID', {
+      day: '2-digit', month: '2-digit', year: 'numeric'
+    }).split('/').join('/');
+
+    const targetTime = time || new Date().toLocaleTimeString('id-ID', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+
+    // Cek sudah absen belum di tanggal tersebut (kecuali pulang)
+    if (attendance_status !== 'pulang') {
+      const alreadyExists = await pool.query(
+        `SELECT * FROM attendance
+         WHERE uid = $1
+         AND date = $2
+         AND attendance_status IN ('tepat_waktu', 'telat')`,
+        [student.uid, targetDate]
+      );
+
+      if (alreadyExists.rows.length > 0) {
+        return res.status(400).json({
+          error: `${student.name} sudah absen masuk pada tanggal ${targetDate}`
+        });
+      }
+    }
+
+    // Simpan absensi manual
+    const result = await pool.query(
+      `INSERT INTO attendance
+         (uid, name, class, status, attendance_status, weather, temperature, humidity, time, date, scanned_at, note)
+       VALUES ($1,$2,$3,'present',$4,'manual',0,0,$5,$6,NOW(),$7)
+       RETURNING *`,
+      [student.uid, student.name, student.class,
+       attendance_status, targetTime, targetDate, note || 'Input manual oleh admin']
+    );
+
+    // Kirim WA notif jika ada nomor
+    if (student.phone) {
+      const statusLabel =
+        attendance_status === 'tepat_waktu' ? 'Tepat Waktu' :
+        attendance_status === 'telat'       ? 'Telat' :
+        attendance_status === 'pulang'      ? 'Pulang' : attendance_status;
+
+      sendWA(student.phone,
+        `Halo ${student.name}, absensi kamu telah diinput MANUAL oleh admin.\n\n` +
+        `- Status: ${statusLabel}\n- Jam: ${targetTime}\n- Tanggal: ${targetDate}\n\n` +
+        `Hubungi guru jika ada pertanyaan. 🙏`
+      );
+    }
+
+    res.json({ success: true, data: result.rows[0] });
+
+  } catch (err) {
+    console.error('Manual attendance error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------- EDIT ABSENSI --------
+app.put('/api/attendance/:id', authenticateToken, adminOnly, async (req, res) => {
+  const { id } = req.params;
+  const { attendance_status, time, note } = req.body;
+
+  try {
+    const result = await pool.query(
+      `UPDATE attendance
+       SET attendance_status = $1, time = $2, note = $3
+       WHERE id = $4
+       RETURNING *`,
+      [attendance_status, time, note, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Data tidak ditemukan' });
+    }
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(3001, '0.0.0.0', () => {
   console.log('Server running on port 3001');
   console.log('Endpoints:');
