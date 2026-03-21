@@ -32,12 +32,16 @@ function App() {
       <div className="App">
         <nav className="navbar">
           <div className="navbar-brand">
-            <div className="logo">N</div>
-            <div>
-              <h1>NASI</h1>
-              <span>Attendance System</span>
-            </div>
+          <img
+            src="/logo.png"
+            alt="NASI Logo"
+            style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }}
+          />
+          <div>
+            <h1>NASI</h1>
+            <span>Attendance System</span>
           </div>
+        </div>
           <div className="nav-links">
             <NavLink to="/">Dashboard</NavLink>
             <NavLink to="/analytics">Analytics</NavLink>
