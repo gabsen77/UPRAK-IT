@@ -6,6 +6,7 @@ import Analytics      from './pages/Analytics';
 import Login          from './pages/Login';
 import UserManagement from './pages/UserManagement';
 import Settings from './pages/Settings';
+import Rekap from './pages/Rekap';
 import './App.css';
 
 function App() {
@@ -39,6 +40,7 @@ function App() {
           <div className="nav-links">
             <NavLink to="/">Dashboard</NavLink>
             <NavLink to="/analytics">Analytics</NavLink>
+            <NavLink to="/rekap">Rekap</NavLink>
             {/* Hanya admin yang bisa lihat menu ini */}
             {isAdmin && <NavLink to="/students">Students</NavLink>}
             {isAdmin && <NavLink to="/users">Users</NavLink>}
@@ -73,6 +75,7 @@ function App() {
             {/* Semua role bisa akses */}
             <Route path="/"          element={<Dashboard />} />
             <Route path="/analytics" element={<Analytics />} />
+            <Route path="/rekap" element={<Rekap />} />
 
             {/* Hanya admin */}
             <Route path="/students"

@@ -639,6 +639,96 @@ app.get('/api/schedule/today/public', async (req, res) => {
   }
 });
 
+// -------- REKAP PER SISWA --------
+app.get('/api/students/:id/rekap', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { month, year } = req.query;
+
+  try {
+    const studentResult = await pool.query(
+      'SELECT * FROM students WHERE id = $1', [id]
+    );
+
+    if (studentResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Siswa tidak ditemukan' });
+    }
+
+    const student = studentResult.rows[0];
+
+    let query = `
+      SELECT * FROM attendance
+      WHERE uid = $1
+      AND status = 'present'
+    `;
+    const params = [student.uid];
+
+    if (month && year) {
+      query += ` AND EXTRACT(MONTH FROM scanned_at) = $2
+                 AND EXTRACT(YEAR FROM scanned_at)  = $3`;
+      params.push(month, year);
+    }
+
+    query += ' ORDER BY scanned_at DESC';
+
+    const attendance = await pool.query(query, params);
+
+    // Hitung statistik
+    const rows = attendance.rows;
+    const stats = {
+      total:       rows.length,
+      tepat_waktu: rows.filter(r => r.attendance_status === 'tepat_waktu').length,
+      telat:       rows.filter(r => r.attendance_status === 'telat').length,
+      pulang:      rows.filter(r => r.attendance_status === 'pulang').length,
+    };
+
+    res.json({ student, attendance: rows, stats });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------- SUMMARY SEMUA SISWA (untuk tabel rekap) --------
+app.get('/api/rekap/summary', authenticateToken, async (req, res) => {
+  const { month, year } = req.query;
+
+  try {
+    let dateFilter = '';
+    const params = [];
+
+    if (month && year) {
+      dateFilter = `AND EXTRACT(MONTH FROM a.scanned_at) = $1
+                    AND EXTRACT(YEAR FROM a.scanned_at)  = $2`;
+      params.push(month, year);
+    }
+
+    const result = await pool.query(`
+      SELECT
+        s.id,
+        s.name,
+        s.class,
+        s.uid,
+        s.phone,
+        COUNT(a.id) FILTER (WHERE a.attendance_status = 'tepat_waktu') as tepat_waktu,
+        COUNT(a.id) FILTER (WHERE a.attendance_status = 'telat')       as telat,
+        COUNT(a.id) FILTER (WHERE a.attendance_status = 'pulang')      as pulang,
+        COUNT(a.id) FILTER (WHERE a.status = 'present')                as total_hadir,
+        MAX(a.scanned_at) as last_scan
+      FROM students s
+      LEFT JOIN attendance a ON s.uid = a.uid
+        AND a.status = 'present'
+        ${dateFilter}
+      GROUP BY s.id, s.name, s.class, s.uid, s.phone
+      ORDER BY s.name ASC
+    `, params);
+
+    res.json(result.rows);
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(3001, '0.0.0.0', () => {
   console.log('Server running on port 3001');
   console.log('Endpoints:');
