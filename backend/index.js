@@ -224,8 +224,8 @@ app.get('/api/students/today', authenticateToken, async (req, res) => {
 
     const attendance = await pool.query(`
       SELECT * FROM attendance
-      WHERE DATE(scanned_at AT TIME ZONE 'Asia/Jakarta') = 
-            CURRENT_DATE AT TIME ZONE 'Asia/Jakarta'
+      WHERE scanned_at >= CURRENT_DATE AT TIME ZONE 'Asia/Jakarta'
+      AND scanned_at < (CURRENT_DATE + 1) AT TIME ZONE 'Asia/Jakarta'
       AND status = 'present'
       ORDER BY scanned_at ASC
     `);
@@ -319,7 +319,7 @@ app.post('/api/attendance', async (req, res) => {
     if (studentResult.rows.length === 0) {
       await pool.query(
         `INSERT INTO attendance (uid, name, class, status, attendance_status, weather, temperature, humidity, time, date, scanned_at)
-         VALUES ($1,'Unknown','Unknown','unknown','unknown',$2,$3,$4,$5,$6,NOW())`,
+         VALUES ($1,'Unknown','Unknown','unknown','unknown',$2,$3,$4,$5,$6,NOW() AT TIME ZONE 'Asia/Jakarta')`,
         [uid, weather, temperature, humidity, time, date]
       );
       return res.json({ status: 'unknown' });
@@ -349,7 +349,7 @@ app.post('/api/attendance', async (req, res) => {
 
       await pool.query(
         `INSERT INTO attendance (uid, name, class, status, attendance_status, weather, temperature, humidity, time, date, scanned_at)
-         VALUES ($1,$2,$3,'present','pulang',$4,$5,$6,$7,$8,NOW())`,
+         VALUES ($1,$2,$3,'present','pulang',$4,$5,$6,$7,$8,NOW() AT TIME ZONE 'Asia/Jakarta')`,
         [uid, student.name, student.class, weather, temperature, humidity, time, date]
       );
 
@@ -372,7 +372,7 @@ app.post('/api/attendance', async (req, res) => {
 
     await pool.query(
       `INSERT INTO attendance (uid, name, class, status, attendance_status, weather, temperature, humidity, time, date, scanned_at)
-       VALUES ($1,$2,$3,'present',$4,$5,$6,$7,$8,$9,NOW())`,
+       VALUES ($1,$2,$3,'present',$4,$5,$6,$7,$8,$9,NOW() AT TIME ZONE 'Asia/Jakarta')`,
       [uid, student.name, student.class, status, weather, temperature, humidity, time, date]
     );
 
@@ -447,8 +447,8 @@ app.post('/api/attendance/manual', authenticateToken, adminOnly, async (req, res
     }
 
     const result = await pool.query(
-      `INSERT INTO attendance (uid, name, class, status, attendance_status, weather, temperature, humidity, time, date, scanned_at, note)
-       VALUES ($1,$2,$3,'present',$4,'manual',0,0,$5,$6,NOW(),$7) RETURNING *`,
+      `INSERT INTO attendance (..., scanned_at, note)
+      VALUES ($1,$2,$3,'present',$4,'manual',0,0,$5,$6,NOW() AT TIME ZONE 'Asia/Jakarta',$7) RETURNING *`,
       [student.uid, student.name, student.class, attendance_status, targetTime, targetDate, note || 'Input manual oleh admin']
     );
 
