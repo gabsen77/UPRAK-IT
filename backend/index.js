@@ -91,7 +91,7 @@ cron.schedule('0 0 * * *', async () => {
 }, { timezone: 'Asia/Jakarta' });
 
 // -------- CRON: REMINDER BELUM ABSEN (07:30 WIB) --------
-cron.schedule('30 7 * * 1-6', async () => {
+cron.schedule('30 7 * * 1-5', async () => {
   console.log('Running late reminder cron...');
   try {
     const result = await pool.query(`
