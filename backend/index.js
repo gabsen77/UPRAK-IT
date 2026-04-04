@@ -10,6 +10,12 @@ const axiosLib = require('axios');
 const PDFDocument = require('pdfkit');
 const app     = express();
 
+let globalWeather = {
+  temperature: 0,
+  humidity: 0,
+  weather: 'normal'
+};
+
 app.use(express.json());
 app.use(cors({
   origin: '*',
@@ -323,8 +329,10 @@ app.delete('/api/students/:id', authenticateToken, adminOnly, async (req, res) =
 // ================================================
 
 app.post('/api/attendance', async (req, res) => {
-  const { uid, temperature, humidity, time, date, status, weather } = req.body;
-  console.log(`UID: ${uid} | Status: ${status} | Jam: ${time} | Date: ${date}`);
+  const { uid, time, date, status } = req.body;
+  const { temperature, humidity, weather } = globalWeather; 
+
+  console.log(`UID: ${uid} | Status: ${status} | Jam: ${time} | Date: ${date} | Cuaca: ${weather}`);
 
   try {
     const studentResult = await pool.query('SELECT * FROM students WHERE uid = $1', [uid]);
@@ -524,6 +532,7 @@ app.get('/api/analytics/daily', authenticateToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // ================================================
 // REKAP
@@ -757,6 +766,44 @@ app.get('/api/export/pdf', authenticateToken, async (req, res) => {
 
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ================================================
+// FITUR BARU: CUACA & IMPORT CSV
+// ================================================
+
+// 1. Endpoint untuk ESP32 kirim cuaca tiap 5 menit
+app.post('/api/weather/update', async (req, res) => {
+  const { temperature, humidity, weather } = req.body;
+  if (temperature !== undefined) globalWeather.temperature = temperature;
+  if (humidity !== undefined) globalWeather.humidity = humidity;
+  if (weather) globalWeather.weather = weather;
+  
+  console.log(`[CUACA UPDATE] Temp: ${temperature}°C, Hum: ${humidity}%, Status: ${weather}`);
+  res.json({ success: true, data: globalWeather });
+});
+
+// 2. Endpoint untuk Import CSV Siswa
+app.post('/api/students/bulk', authenticateToken, adminOnly, async (req, res) => {
+  const { students } = req.body;
+  if (!students || !Array.isArray(students)) return res.status(400).json({ error: 'Data tidak valid' });
+
+  let successCount = 0;
+  try {
+    for (const s of students) {
+      // ON CONFLICT DO UPDATE: Jika UID sudah ada, datanya ditimpa (update), jika belum, ditambah baru
+      await pool.query(
+        `INSERT INTO students (uid, name, class, phone) VALUES ($1,$2,$3,$4)
+         ON CONFLICT (uid) DO UPDATE SET name=$2, class=$3, phone=$4`,
+        [s.uid, s.name, s.class, s.phone || null]
+      );
+      successCount++;
+    }
+    res.json({ success: true, message: `Berhasil import/update ${successCount} siswa dari CSV` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal import ke database: ' + err.message });
   }
 });
 

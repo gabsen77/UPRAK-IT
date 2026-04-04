@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // Tambahkan useRef
 import api from '../api/axiosConfig';
 
 const Students = () => {
@@ -13,6 +13,64 @@ const Students = () => {
   const [editId,       setEditId]       = useState(null);
   const [searchName,   setSearchName]   = useState('');
   const [searchClass,  setSearchClass]  = useState('');
+
+const fileInputRef = useRef(null);
+
+  // --- FUNGSI DOWNLOAD TEMPLATE CSV ---
+  const downloadTemplate = () => {
+    // Header wajib: UID, Nama, Kelas, WA
+    const csvContent = "UID,Nama_Lengkap,Kelas,No_WA\nD5 32 86 46,Budi Santoso,XII6-03,628123456789\nA1 B2 C3 D4,Siti Aminah,XII6-04,628987654321";
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "template_siswa.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // --- FUNGSI UPLOAD CSV ---
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target.result;
+      const lines = text.split('\n').filter(line => line.trim() !== ''); // Pisahkan baris
+      
+      const studentsToUpload = [];
+      // Looping mulai dari i = 1 untuk melewati Header baris ke-0
+      for (let i = 1; i < lines.length; i++) {
+        // Hapus karakter '\r' lalu pisahkan dengan koma
+        const cols = lines[i].replace('\r', '').split(','); 
+        if (cols.length >= 3) {
+          studentsToUpload.push({
+            uid: cols[0].trim(),
+            name: cols[1].trim(),
+            class: cols[2].trim(),
+            phone: cols[3] ? cols[3].replace(/[^0-9]/g, '').trim() : '' // Bersihkan nomor WA
+          });
+        }
+      }
+
+      try {
+        setMessage(`Memproses ${studentsToUpload.length} data siswa...`);
+        setMsgType('success');
+        const res = await api.post('/students/bulk', { students: studentsToUpload });
+        setMessage(res.data.message);
+        setMsgType('success');
+        fetchAll(); // Refresh tabel data siswa
+      } catch (err) {
+        setMessage(err.response?.data?.error || 'Gagal import CSV');
+        setMsgType('error');
+      }
+      
+      if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input file
+    };
+    reader.readAsText(file);
+  };
 
 const fetchAll = async () => {
   const [s, t] = await Promise.all([
@@ -144,6 +202,32 @@ const fetchAll = async () => {
             )}
           </div>
           <div className="card-body">
+            
+            {/* ---- UI IMPORT CSV ---- */}
+            {!editId && (
+              <div style={{
+                marginBottom: 20, padding: 15, background: '#f8fafc',
+                borderRadius: '8px', border: '1px dashed #cbd5e1'
+              }}>
+                <div style={{ marginBottom: '10px', fontSize: '0.9em', fontWeight: 600 }}>Import Data Banyak (CSV)</div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <button type="button" onClick={downloadTemplate} style={{
+                    padding: '8px 12px', background: '#eff6ff', color: '#1e40af',
+                    border: '1px solid #bfdbfe', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85em'
+                  }}>
+                    📥 Download Template
+                  </button>
+                  <input 
+                    type="file" 
+                    accept=".csv" 
+                    onChange={handleFileUpload} 
+                    ref={fileInputRef}
+                    style={{ fontSize: '0.85em', color: '#475569' }}
+                  />
+                </div>
+              </div>
+            )}
+            {/* ------------------------ */}
             <form onSubmit={handleSubmit}>
               <div className="form-group">
                 <label>UID Kartu RFID</label>
