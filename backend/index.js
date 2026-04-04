@@ -16,6 +16,9 @@ let globalWeather = {
   weather: 'normal'
 };
 
+let rainCounter = 0;          
+let isRainDelayApplied = false;
+
 app.use(express.json());
 app.use(cors({
   origin: '*',
@@ -79,6 +82,12 @@ const getTodayISO = () => {
 // -------- CRON: RESET LOG HARIAN --------
 cron.schedule('0 0 * * *', async () => {
   console.log('New day started - attendance auto resets via DATE filter');
+  
+  // --- TAMBAHKAN INI ---
+  rainCounter = 0;           // Reset hitungan hujan ke 0
+  isRainDelayApplied = false; // Buka kunci perubahan jadwal untuk besok
+  // ---------------------
+  
 }, { timezone: 'Asia/Jakarta' });
 
 // -------- CRON: REMINDER BELUM ABSEN (07:30 WIB) --------
@@ -781,6 +790,40 @@ app.post('/api/weather/update', async (req, res) => {
   if (weather) globalWeather.weather = weather;
   
   console.log(`[CUACA UPDATE] Temp: ${temperature}°C, Hum: ${humidity}%, Status: ${weather}`);
+
+  // ==========================================
+  // LOGIC HUJAN 20 MENIT -> JAM MASUK JADI 07:00
+  // ==========================================
+  if (weather === 'hujan') {
+    rainCounter++;
+    console.log(`[INFO] Hujan berturut-turut: ${rainCounter}/4`);
+
+    // Jika hujan 4 kali (20 menit) dan belum diubah hari ini
+    if (rainCounter >= 4 && !isRainDelayApplied) {
+      console.log('🌧️ HUJAN 20 MENIT! Mengubah jadwal masuk menjadi 07:00 WIB otomatis...');
+      
+      try {
+        // Update database jadwal hari ini
+        await pool.query(`
+          INSERT INTO schedule_override (date, jam_masuk_h, jam_masuk_m, jam_telat_h, jam_telat_m, jam_pulang_h, jam_pulang_m)
+          VALUES (TO_CHAR(NOW() AT TIME ZONE 'Asia/Jakarta', 'DD/MM/YYYY'), 7, 0, 7, 0, 15, 20)
+          ON CONFLICT (date) DO UPDATE SET
+            jam_masuk_h = 7, jam_masuk_m = 0, 
+            jam_telat_h = 7, jam_telat_m = 0
+        `);
+        isRainDelayApplied = true; // Tandai agar tidak diupdate lagi hari ini
+      } catch (err) {
+        console.error('Gagal update jadwal hujan:', err.message);
+      }
+    }
+  } else {
+    // Jika sebelum 20 menit cuaca kembali normal/panas/lembab, reset counter
+    if (!isRainDelayApplied) {
+      rainCounter = 0;
+    }
+  }
+  // ==========================================
+
   res.json({ success: true, data: globalWeather });
 });
 
