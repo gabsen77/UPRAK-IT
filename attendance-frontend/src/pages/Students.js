@@ -38,30 +38,55 @@ const fileInputRef = useRef(null);
     const reader = new FileReader();
     reader.onload = async (event) => {
       const text = event.target.result;
-      const lines = text.split('\n').filter(line => line.trim() !== ''); // Pisahkan baris
+      const lines = text.split('\n').filter(line => line.trim() !== ''); // Pisahkan per baris
       
       const studentsToUpload = [];
-      // Looping mulai dari i = 1 untuk melewati Header baris ke-0
+      
+      // Looping mulai dari i = 1 untuk melewati Header
       for (let i = 1; i < lines.length; i++) {
-        // Hapus karakter '\r' lalu pisahkan dengan koma
-        const cols = lines[i].replace('\r', '').split(','); 
+        // Bersihkan karakter \r dan tanda kutip ganda (") dari Excel
+        let line = lines[i].replace(/[\r"]/g, ''); 
+        
+        // Deteksi pemisah: jika ada titik koma (;), gunakan itu. Jika tidak, gunakan koma (,).
+        const separator = line.includes(';') ? ';' : ','; 
+        const cols = line.split(separator);
+
+        // Pastikan minimal ada 3 kolom (UID, Nama, Kelas)
         if (cols.length >= 3) {
-          studentsToUpload.push({
-            uid: cols[0].trim(),
-            name: cols[1].trim(),
-            class: cols[2].trim(),
-            phone: cols[3] ? cols[3].replace(/[^0-9]/g, '').trim() : '' // Bersihkan nomor WA
-          });
+          const uidClean = cols[0].trim();
+          const nameClean = cols[1].trim();
+          const classClean = cols[2].trim();
+          const phoneClean = cols[3] ? cols[3].replace(/[^0-9]/g, '').trim() : '';
+
+          // Jangan masukkan kalau UID atau Namanya kosong
+          if (uidClean !== '' && nameClean !== '') {
+            studentsToUpload.push({
+              uid: uidClean,
+              name: nameClean,
+              class: classClean,
+              phone: phoneClean
+            });
+          }
         }
+      }
+
+      // Cek apakah data kosong setelah diproses
+      if (studentsToUpload.length === 0) {
+        setMessage('Gagal: Format CSV tidak sesuai atau data kosong.');
+        setMsgType('error');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
       }
 
       try {
         setMessage(`Memproses ${studentsToUpload.length} data siswa...`);
         setMsgType('success');
+        
         const res = await api.post('/students/bulk', { students: studentsToUpload });
         setMessage(res.data.message);
         setMsgType('success');
         fetchAll(); // Refresh tabel data siswa
+        
       } catch (err) {
         setMessage(err.response?.data?.error || 'Gagal import CSV');
         setMsgType('error');
