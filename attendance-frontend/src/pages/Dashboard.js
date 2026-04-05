@@ -46,6 +46,46 @@ const Dashboard = () => {
     }
   };
 
+  const handleClearLogs = async () => {
+    // Cek apakah user adalah admin
+    const user = JSON.parse(localStorage.getItem('user'));
+    if (user?.role !== 'admin') {
+      alert('Hanya admin yang dapat menghapus log!');
+      return;
+    }
+
+    const mode = window.prompt(
+      "🗑️ PENGHAPUSAN LOG ABSENSI\n\nKetik '1' untuk menghapus log HARI INI saja.\nKetik 'ALL' untuk menghapus SEMUA log dari awal."
+    );
+
+    if (!mode) return; // Batal jika kosong/cancel
+
+    let dateParam = '';
+    let confirmMsg = '';
+
+    if (mode === '1') {
+      dateParam = `?date=${getTodayStr()}`;
+      confirmMsg = `Yakin ingin menghapus data absensi HARI INI (${getTodayStr()})?`;
+    } else if (mode.toUpperCase() === 'ALL') {
+      dateParam = ''; 
+      confirmMsg = `⚠️ PERINGATAN FATAL!\n\nAnda yakin ingin menghapus SELURUH DATA ABSENSI dari database? Data tidak bisa dikembalikan!`;
+    } else {
+      alert("Input tidak valid. Proses dibatalkan.");
+      return;
+    }
+
+    // Konfirmasi terakhir
+    if (window.confirm(confirmMsg)) {
+      try {
+        const res = await api.delete(`/attendance/clear${dateParam}`);
+        alert(`Berhasil menghapus ${res.data.deleted} data absensi.`);
+        fetchAttendance(); // Refresh tabel setelah dihapus
+      } catch (err) {
+        alert("Gagal menghapus log: " + (err.response?.data?.error || err.message));
+      }
+    }
+  };
+
   useEffect(() => {
     fetchAttendance();
     const interval = setInterval(fetchAttendance, 5000);
@@ -248,11 +288,37 @@ const Dashboard = () => {
 
       {/* Table */}
       <div className="card">
-        <div className="card-header">
-          <h3>Log Absensi</h3>
-          <div className="live-badge">
-            <span className="live-dot"></span> Live
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h3 style={{ margin: 0 }}>Log Absensi</h3>
+            <div className="live-badge">
+              <span className="live-dot"></span> Live
+            </div>
           </div>
+
+          {/* Tombol Clear Log hanya muncul jika login sebagai admin */}
+          {JSON.parse(localStorage.getItem('user'))?.role === 'admin' && (
+            <button 
+              onClick={handleClearLogs}
+              style={{
+                background: '#fef2f2',
+                color: '#dc2626',
+                border: '1px solid #fecaca',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                fontSize: '0.85em',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              🗑️ Clear Log
+            </button>
+          )}
+
         </div>
 
         {error && (
