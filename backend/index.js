@@ -428,10 +428,20 @@ app.get('/api/attendance', authenticateToken, async (req, res) => {
 
 // -------- CLEAR LOG --------
 app.delete('/api/attendance/clear', authenticateToken, adminOnly, async (req, res) => {
-  const { date } = req.query;
+  const { date, startDate, endDate } = req.query;
   try {
     let result;
-    if (date) {
+    
+    if (startDate && endDate) {
+      // Hapus berdasarkan rentang tanggal (gunakan scanned_at agar akurat)
+      result = await pool.query(
+        `DELETE FROM attendance 
+         WHERE DATE(scanned_at AT TIME ZONE 'Asia/Jakarta') >= $1 
+         AND DATE(scanned_at AT TIME ZONE 'Asia/Jakarta') <= $2 
+         RETURNING id`,
+        [startDate, endDate]
+      );
+    } else if (date) {
       // Hapus log tanggal tertentu (format DD/MM/YYYY)
       result = await pool.query(
         `DELETE FROM attendance WHERE date = $1 RETURNING id`,
@@ -441,6 +451,7 @@ app.delete('/api/attendance/clear', authenticateToken, adminOnly, async (req, re
       // Hapus semua log
       result = await pool.query(`DELETE FROM attendance RETURNING id`);
     }
+    
     res.json({ success: true, deleted: result.rowCount });
   } catch (err) {
     res.status(500).json({ error: err.message });

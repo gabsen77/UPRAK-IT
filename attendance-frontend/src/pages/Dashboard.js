@@ -34,6 +34,10 @@ const Dashboard = () => {
   const [filterStatus,  setFilterStatus]  = useState('');
   const [showUnknown,   setShowUnknown]   = useState(false);
   const [filterDate, setFilterDate] = useState('');
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [clearType, setClearType]           = useState('today'); // 'today', 'range', 'all'
+  const [clearStart, setClearStart]         = useState('');
+  const [clearEnd, setClearEnd]             = useState('');
 
 
   const fetchAttendance = async () => {
@@ -46,40 +50,39 @@ const Dashboard = () => {
     }
   };
 
-  const handleClearLogs = async () => {
-    // Cek apakah user adalah admin
+  const openClearModal = () => {
     const user = JSON.parse(localStorage.getItem('user'));
     if (user?.role !== 'admin') {
       alert('Hanya admin yang dapat menghapus log!');
       return;
     }
+    setShowClearModal(true);
+  };
 
-    const mode = window.prompt(
-      "🗑️ PENGHAPUSAN LOG ABSENSI\n\nKetik '1' untuk menghapus log HARI INI saja.\nKetik 'ALL' untuk menghapus SEMUA log dari awal."
-    );
-
-    if (!mode) return; // Batal jika kosong/cancel
-
-    let dateParam = '';
+  const executeClearLogs = async () => {
+    let url = '/attendance/clear';
     let confirmMsg = '';
 
-    if (mode === '1') {
-      dateParam = `?date=${getTodayStr()}`;
-      confirmMsg = `Yakin ingin menghapus data absensi HARI INI (${getTodayStr()})?`;
-    } else if (mode.toUpperCase() === 'ALL') {
-      dateParam = ''; 
-      confirmMsg = `⚠️ PERINGATAN FATAL!\n\nAnda yakin ingin menghapus SELURUH DATA ABSENSI dari database? Data tidak bisa dikembalikan!`;
-    } else {
-      alert("Input tidak valid. Proses dibatalkan.");
-      return;
+    if (clearType === 'today') {
+      url += `?date=${getTodayStr()}`;
+      confirmMsg = `Yakin hapus data HARI INI (${getTodayStr()})?`;
+    } else if (clearType === 'range') {
+      if (!clearStart || !clearEnd) {
+        alert('Harap pilih Tanggal Awal dan Tanggal Akhir!');
+        return;
+      }
+      url += `?startDate=${clearStart}&endDate=${clearEnd}`;
+      confirmMsg = `Yakin hapus data dari tanggal ${clearStart} sampai ${clearEnd}?`;
+    } else if (clearType === 'all') {
+      confirmMsg = `⚠️ PERINGATAN FATAL!\n\nYakin ingin menghapus SELURUH DATA? Data tidak bisa dikembalikan!`;
     }
 
-    // Konfirmasi terakhir
     if (window.confirm(confirmMsg)) {
       try {
-        const res = await api.delete(`/attendance/clear${dateParam}`);
+        const res = await api.delete(url);
         alert(`Berhasil menghapus ${res.data.deleted} data absensi.`);
-        fetchAttendance(); // Refresh tabel setelah dihapus
+        setShowClearModal(false);
+        fetchAttendance(); // Refresh tabel
       } catch (err) {
         alert("Gagal menghapus log: " + (err.response?.data?.error || err.message));
       }
@@ -300,7 +303,7 @@ const Dashboard = () => {
           {/* Tombol Clear Log hanya muncul jika login sebagai admin */}
           {JSON.parse(localStorage.getItem('user'))?.role === 'admin' && (
             <button 
-              onClick={handleClearLogs}
+              onClick={openClearModal}
               style={{
                 background: '#fef2f2',
                 color: '#dc2626',
@@ -367,8 +370,73 @@ const Dashboard = () => {
           )}
         </div>
       </div>
-    </div>
+      
+    {/* MODAL CLEAR LOG */}
+      {showClearModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div style={{
+            background: 'white', padding: '24px', borderRadius: '12px',
+            width: '100%', maxWidth: '400px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)'
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#1e293b' }}>🗑️ Hapus Log Absensi</h3>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input type="radio" name="cleartype" value="today" 
+                  checked={clearType === 'today'} onChange={() => setClearType('today')} />
+                Hanya Hari Ini ({getTodayStr()})
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input type="radio" name="cleartype" value="range" 
+                  checked={clearType === 'range'} onChange={() => setClearType('range')} />
+                Rentang Tanggal (Range)
+              </label>
+
+              {/* Input Tanggal muncul kalau pilih Range */}
+              {clearType === 'range' && (
+                <div style={{ display: 'flex', gap: '10px', marginLeft: '24px', padding: '10px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.8em', color: '#64748b', marginBottom: '4px' }}>Dari Tanggal</div>
+                    <input type="date" value={clearStart} onChange={e => setClearStart(e.target.value)}
+                      style={{ width: '100%', padding: '6px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.8em', color: '#64748b', marginBottom: '4px' }}>Sampai Tanggal</div>
+                    <input type="date" value={clearEnd} onChange={e => setClearEnd(e.target.value)}
+                      style={{ width: '100%', padding: '6px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                  </div>
+                </div>
+              )}
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#dc2626', fontWeight: 600 }}>
+                <input type="radio" name="cleartype" value="all" 
+                  checked={clearType === 'all'} onChange={() => setClearType('all')} />
+                Hapus Semua Data (Reset Total)
+              </label>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button onClick={() => setShowClearModal(false)} style={{
+                padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1',
+                background: '#f8fafc', color: '#475569', cursor: 'pointer', fontWeight: 600
+              }}>Batal</button>
+              
+              <button onClick={executeClearLogs} style={{
+                padding: '8px 16px', borderRadius: '6px', border: 'none',
+                background: '#ef4444', color: 'white', cursor: 'pointer', fontWeight: 600
+              }}>Hapus Data</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* END MODAL */}
+
+    </div> // INI ADALAH PENUTUP </div> UTAMA COMPONENT ANDA
   );
 };
-
 export default Dashboard;
