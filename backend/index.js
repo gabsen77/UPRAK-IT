@@ -426,6 +426,27 @@ app.get('/api/attendance', authenticateToken, async (req, res) => {
   }
 });
 
+// -------- CLEAR LOG --------
+app.delete('/api/attendance/clear', authenticateToken, adminOnly, async (req, res) => {
+  const { date } = req.query;
+  try {
+    let result;
+    if (date) {
+      // Hapus log tanggal tertentu (format DD/MM/YYYY)
+      result = await pool.query(
+        `DELETE FROM attendance WHERE date = $1 RETURNING id`,
+        [date]
+      );
+    } else {
+      // Hapus semua log
+      result = await pool.query(`DELETE FROM attendance RETURNING id`);
+    }
+    res.json({ success: true, deleted: result.rowCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/attendance/:id', authenticateToken, adminOnly, async (req, res) => {
   const { id } = req.params;
   try {
@@ -850,26 +871,7 @@ app.post('/api/students/bulk', authenticateToken, adminOnly, async (req, res) =>
   }
 });
 
-// -------- CLEAR LOG --------
-app.delete('/api/attendance/clear', authenticateToken, adminOnly, async (req, res) => {
-  const { date } = req.query;
-  try {
-    let result;
-    if (date) {
-      // Hapus log tanggal tertentu (format DD/MM/YYYY)
-      result = await pool.query(
-        `DELETE FROM attendance WHERE date = $1 RETURNING id`,
-        [date]
-      );
-    } else {
-      // Hapus semua log
-      result = await pool.query(`DELETE FROM attendance RETURNING id`);
-    }
-    res.json({ success: true, deleted: result.rowCount });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+
 
 // ================================================
 // START SERVER
