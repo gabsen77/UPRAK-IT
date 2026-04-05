@@ -47,18 +47,16 @@ const Login = ({ onLogin }) => {
       }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{
-            width: '64px', height: '64px',
-            background: 'linear-gradient(135deg, #1a56db, #1e3a8a)',
-            borderRadius: '16px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '24px',
-            fontWeight: '800',
-            color: 'white',
-            marginBottom: '16px',
-          }}>N</div>
+          <img 
+            src="/logo.png" 
+            alt="Logo Sekolah" 
+            style={{
+              width: '80px', 
+              height: '80px', 
+              objectFit: 'contain',
+              marginBottom: '12px'
+            }} 
+          />
           <h1 style={{ fontSize: '1.6em', fontWeight: '700', color: '#1e3a8a' }}>NASI</h1>
           <p style={{ color: '#718096', fontSize: '0.9em', marginTop: '4px' }}>
             Attendance System — Login
